@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM/Agent 可观测性工具深度调研</title>
+<style>
+:root {
+  --bg: #FAF9F6; --panel: #FFFFFF; --ink: #20242E; --muted: #6B7280;
+  --accent: #0E6E5C; --accent-soft: #E4F1ED; --line: #E4E2DC;
+  --code-bg: #F2F1EC; --code-ink: #33404A; --warn: #9A6A15;
+  --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161B; --panel: #1A1D24; --ink: #E4E7EE; --muted: #97A0B2;
+    --accent: #4FBFA8; --accent-soft: #1E2C29; --line: #2A2E38;
+    --code-bg: #1E2128; --code-ink: #C6CFDA; --warn: #D9A544;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161B; --panel: #1A1D24; --ink: #E4E7EE; --muted: #97A0B2;
+  --accent: #4FBFA8; --accent-soft: #1E2C29; --line: #2A2E38;
+  --code-bg: #1E2128; --code-ink: #C6CFDA; --warn: #D9A544;
+}
+:root[data-theme="light"] {
+  --bg: #FAF9F6; --panel: #FFFFFF; --ink: #20242E; --muted: #6B7280;
+  --accent: #0E6E5C; --accent-soft: #E4F1ED; --line: #E4E2DC;
+  --code-bg: #F2F1EC; --code-ink: #33404A; --warn: #9A6A15;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15.5px/1.75 -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+.wrap { display: flex; max-width: 1360px; margin: 0 auto; }
+nav.toc {
+  width: 292px; flex: none; position: sticky; top: 0; align-self: flex-start;
+  height: 100vh; overflow-y: auto; padding: 28px 8px 60px 20px;
+  border-right: 1px solid var(--line); font-size: 13px;
+}
+nav.toc .toc-head { font-weight: 700; letter-spacing: .08em; font-size: 11px; color: var(--muted); text-transform: uppercase; margin: 0 0 10px 10px; }
+nav.toc ul { list-style: none; margin: 0; padding: 0 0 0 10px; }
+nav.toc ul ul { padding-left: 14px; border-left: 1px solid var(--line); margin: 2px 0 6px 4px; }
+nav.toc li { margin: 1px 0; }
+nav.toc a { color: var(--muted); text-decoration: none; display: block; padding: 3px 8px; border-radius: 6px; line-height: 1.45; }
+nav.toc a:hover { color: var(--accent); background: var(--accent-soft); }
+main {
+  flex: 1; min-width: 0; padding: 40px 48px 120px;
+}
+header.doc-head { border-bottom: 2px solid var(--accent); padding-bottom: 22px; margin-bottom: 34px; }
+header.doc-head h1 { font-size: 30px; line-height: 1.3; margin: 0 0 10px; letter-spacing: -0.01em; text-wrap: balance; }
+header.doc-head .meta { color: var(--muted); font-size: 13.5px; }
+header.doc-head .meta code { font-family: var(--mono); background: var(--code-bg); padding: 1px 7px; border-radius: 5px; font-size: 12.5px; }
+h2 {
+  font-size: 22px; margin: 56px 0 18px; padding-top: 18px;
+  border-top: 1px solid var(--line); letter-spacing: -0.01em;
+}
+h2:first-of-type { border-top: none; padding-top: 0; }
+h3 { font-size: 18px; margin: 40px 0 12px; color: var(--ink); }
+h3 { padding-left: 12px; border-left: 4px solid var(--accent); }
+h4 { font-size: 15px; margin: 26px 0 8px; color: var(--accent); letter-spacing: .01em; }
+p, li { max-width: 78ch; }
+main a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+code { font-family: var(--mono); font-size: .86em; background: var(--code-bg); color: var(--code-ink); padding: 1.5px 6px; border-radius: 5px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55; }
+pre code { background: none; padding: 0; font-size: 12.8px; }
+blockquote {
+  margin: 18px 0; padding: 10px 18px; border-left: 4px solid var(--accent);
+  background: var(--accent-soft); border-radius: 0 10px 10px 0; color: var(--ink);
+}
+blockquote p { margin: 6px 0; }
+.tablewrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; background: var(--panel); }
+th, td { border-bottom: 1px solid var(--line); padding: 9px 13px; text-align: left; vertical-align: top; }
+td + td, th + th { border-left: 1px solid var(--line); }
+th { background: var(--accent-soft); color: var(--ink); font-weight: 650; white-space: nowrap; position: sticky; top: 0; }
+tr:last-child td { border-bottom: none; }
+hr { border: none; border-top: 1px solid var(--line); margin: 44px 0; }
+strong { font-weight: 650; }
+li { margin: 3px 0; }
+ul, ol { padding-left: 26px; }
+.backtop {
+  position: fixed; right: 26px; bottom: 26px; background: var(--panel);
+  border: 1px solid var(--line); color: var(--muted); border-radius: 10px;
+  padding: 8px 12px; font-size: 12.5px; text-decoration: none; box-shadow: 0 4px 16px rgba(0,0,0,.08);
+}
+.backtop:hover { color: var(--accent); border-color: var(--accent); }
+@media (max-width: 1100px) {
+  nav.toc { display: none; }
+  main { padding: 28px 20px 90px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="toc">
+    <div class="toc-head">目录</div>
+    <div class="toc">
+<ul>
+<li><a href="#1">1. 领域全景与分类</a><ul>
+<li><a href="#11">1.1 全景查漏：其余值得知道的工具</a></li>
+<li><a href="#llmagent-2026-07">LLM/Agent 可观测性：补充工具盘点（2026-07）</a></li>
+<li><a href="#gateway-observability">网关式观测（Gateway + Observability）</a></li>
+<li><a href="#trace-eval-prompt">全栈工程平台（Trace + Eval + Prompt 管理）</a></li>
+<li><a href="#_1">插桩层 / 标准生态</a></li>
+<li><a href="#_2">已退场（警示案例）</a></li>
+<li><a href="#_3">全景分类总结</a></li>
+<li><a href="#sources">Sources</a></li>
+</ul>
+</li>
+<li><a href="#2">2. 工具深度档案</a><ul>
+<li><a href="#21-langsmith-langchain">2.1 LangSmith (LangChain)</a></li>
+<li><a href="#22-langfuse">2.2 Langfuse</a></li>
+<li><a href="#23-arize-phoenix-openinference">2.3 Arize Phoenix + OpenInference</a></li>
+<li><a href="#24-wb-weave">2.4 W&amp;B Weave</a></li>
+<li><a href="#25-braintrust">2.5 Braintrust</a></li>
+<li><a href="#26-opik-comet">2.6 Opik (Comet)</a></li>
+<li><a href="#27-helicone-promptlayer">2.7 Helicone + PromptLayer</a></li>
+<li><a href="#28-agentops-laminar-lunary">2.8 AgentOps + Laminar + Lunary</a></li>
+<li><a href="#29-opentelemetry-genai-openllmetry-traceloop">2.9 OpenTelemetry GenAI 语义约定 + OpenLLMetry (Traceloop)</a></li>
+<li><a href="#210-langgraph-studio-google-adk-web-ui">2.10 LangGraph Studio + Google ADK Web UI</a></li>
+<li><a href="#211-openai-agents-sdk-tracing-mlflow-tracing">2.11 OpenAI Agents SDK Tracing + MLflow Tracing</a></li>
+<li><a href="#212-promptfoo-deepeval">2.12 promptfoo + DeepEval</a></li>
+<li><a href="#213-datadog-llm-observability-new-relic-ai-monitoring">2.13 Datadog LLM Observability + New Relic AI Monitoring</a></li>
+</ul>
+</li>
+<li><a href="#3">3. 横向能力矩阵</a></li>
+<li><a href="#4">4. 通用设计模式提炼</a><ul>
+<li><a href="#1-trace-span">模式 1：统一追踪数据模型 —— trace → span 层级 + 类型枚举</a></li>
+<li><a href="#2session-user">模式 2：session / user 业务维度上卷</a></li>
+<li><a href="#3_1">模式 3：接入方式光谱 —— 五种埋点形态的取舍</a></li>
+<li><a href="#4otlp-ingest-genai-semconv">模式 4：OTLP 作为通用 ingest，向 GenAI semconv 对齐</a></li>
+<li><a href="#5">模式 5：存储演进路径 —— 从内存到列存</a></li>
+<li><a href="#6">模式 6：异步摄取管道</a></li>
+<li><a href="#7prompt">模式 7：Prompt 管理闭环</a></li>
+<li><a href="#8-">模式 8：数据集-实验闭环（回归测试的工业形态）</a></li>
+<li><a href="#9-llm">模式 9：评测三层次 —— 代码断言 / LLM 评审 / 人工标注</a></li>
+<li><a href="#10hitl">模式 10：HITL —— 断点、状态编辑、时间旅行</a></li>
+<li><a href="#11_1">模式 11：成本核算</a></li>
+<li><a href="#12">模式 12：内容捕获开关与隐私</a></li>
+<li><a href="#13">模式 13：在线监控与告警</a></li>
+</ul>
+</li>
+<li><a href="#5-testplatform">5. 对 testplatform 的落地路线图</a><ul>
+<li><a href="#p0">P0（当前迭代就值得做）</a></li>
+<li><a href="#p1">P1（下个阶段）</a></li>
+<li><a href="#p2">P2（规模化再说）</a></li>
+<li><a href="#_81">刻意不做（当前定位下）</a></li>
+</ul>
+</li>
+<li><a href="#6_1">6. 参考资料</a></li>
+<li><a href="#7">7. 核验记录（附录）</a></li>
+</ul>
+</div>
+
+  </nav>
+  <main id="top">
+    <header class="doc-head">
+      <h1>LLM/Agent 可观测性工具深度调研</h1>
+      <div class="meta">调研日期 2026-07-08 · 供 <code>testplatform</code> 迭代开发参考 · 事实均经二次核验，个别标注「未核实」· 同内容机器可读版: <code>observability-research.md</code></div>
+    </header>
+    
+<p>本报告调研了 20+ 个主流 LLM/Agent 可观测性与评测工具，覆盖商业平台、开源自托管方案、协议标准、开发期调试器与测试框架五类。目标不是排名，而是<strong>拆出每家的设计理念与实现方式，提炼可复用的设计模式，并映射为本平台的开发路线图</strong>。</p>
+<h2 id="1">1. 领域全景与分类</h2>
+<p>按"埋点位置"和"服务阶段"两个轴，这个领域可以切成五类：</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>类别</th>
+<th>解决什么</th>
+<th>代表</th>
+<th>与本平台的关系</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>全生命周期观测平台</strong></td>
+<td>生产级 tracing + 评测 + prompt 管理 + 数据集闭环</td>
+<td>LangSmith、Langfuse、Braintrust、W&amp;B Weave、Opik、Arize Phoenix</td>
+<td>功能范围的主要参照系</td>
+</tr>
+<tr>
+<td><strong>网关/代理式观测</strong></td>
+<td>换个 baseURL 就能观测所有 LLM 流量</td>
+<td>Helicone、Portkey、Braintrust proxy</td>
+<td>一种接入形态，与回调式互补</td>
+</tr>
+<tr>
+<td><strong>协议与标准层</strong></td>
+<td>统一 span 语义与传输，避免厂商锁定</td>
+<td>OpenTelemetry GenAI semconv、OpenInference、OpenLLMetry</td>
+<td>P1 对齐目标</td>
+</tr>
+<tr>
+<td><strong>开发期调试 UI</strong></td>
+<td>单机断点、状态编辑、time-travel</td>
+<td>LangGraph Studio、Google ADK Web、OpenAI Traces</td>
+<td>本平台断点介入的直接对标</td>
+</tr>
+<tr>
+<td><strong>测试/评测框架</strong></td>
+<td>用例矩阵、断言体系、CI 门禁、红队</td>
+<td>promptfoo、DeepEval、autoevals</td>
+<td>本平台测试用例模块的直接对标</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>本平台的独特站位</strong>：市面上"生产观测平台"（Langfuse 等）普遍没有断点介入，"开发调试器"（Studio 等）普遍没有测试用例与批量回归——本平台同时占住这两格（开发期深度介入 + 测试闭环），这是差异化，也是后文路线图刻意保持的边界。</p>
+<h3 id="11">1.1 全景查漏：其余值得知道的工具</h3>
+<h3 id="llmagent-2026-07">LLM/Agent 可观测性：补充工具盘点（2026-07）</h3>
+<p>以下为此前未覆盖、但在 2025–2026 各类对比文章与清单中反复出现的工具。</p>
+<h3 id="gateway-observability">网关式观测（Gateway + Observability）</h3>
+<p><strong>Portkey</strong> — 定位为企业级 AI Gateway，以路由、fallback、负载均衡、缓存为核心，顺带提供请求级日志与成本观测。网关本身开源（Portkey-AI/gateway，支持 1,600+ 模型、50+ 内置护栏），跑在边缘节点上，宣称 20–40ms 开销、99.99% 可用性；但评测/质量监控层较薄，通常需搭配专门评测平台。托管控制台为商业产品。</p>
+<p><strong>Keywords AI</strong> — YC 系创业公司，走"LLM 应用的 Datadog"路线：统一网关代理 200+ 模型，叠加日志、成本/延迟监控与 Prompt 管理。闭源 SaaS，主打小团队快速接入；在 2026 年的主流对比文章中曝光度明显低于 Portkey/Helicone。</p>
+<p><strong>TrueFoundry</strong> — 企业级 AI Gateway + 观测组合，强调治理与私有化部署，闭源。</p>
+<h3 id="trace-eval-prompt">全栈工程平台（Trace + Eval + Prompt 管理）</h3>
+<p><strong>Galileo</strong> — 定位"评测智能"（evaluation intelligence）：用自研 Luna-2 小模型（基于 Llama 3B/8B 微调）做低成本评估器，宣称 sub-200ms、比 LLM-as-judge 便宜 97%，可对 100% 生产流量实时评分并作为护栏拦截幻觉/毒性输出。2025 年推出免费的 Agent Reliability Platform。平台闭源，累计融资 $68M。</p>
+<p><strong>HoneyHive</strong> — 全生命周期平台：OTel 基础上的 tracing、评测、Prompt 管理与人工评审工作流，人评能力是其相对亮点。闭源 SaaS。</p>
+<p><strong>Vellum</strong> — 低代码 LLM 编排平台，把 Prompt 版本管理、工作流编排、评测与生产观测捆绑在一套 UI 里，面向产品/非工程角色友好。闭源。</p>
+<p><strong>Maxim AI</strong> — 端到端评测+观测，特色是"模拟优先"：合成多轮对话做发布前 Agent 仿真测试，以及无代码拖拽式 eval builder。平台闭源，但开源了高性能 LLM 网关 Bifrost。</p>
+<p><strong>LangWatch</strong> — 开源 LLMOps 平台（GitHub 2,500+ stars），OTel 原生，覆盖多轮 Agent 追踪、自动评测生成、仿真测试与治理，可自托管。</p>
+<p><strong>Latitude</strong> — 开源 Prompt/Agent 平台，差异点是通过 MCP 与 Claude Code、Cursor 等编码 Agent 打通，把"发现生产故障 → 自动开 PR 修复"做成闭环。</p>
+<h3 id="_1">插桩层 / 标准生态</h3>
+<p><strong>Langtrace</strong>（Scale3 Labs）— 开源、OTel 标准的 tracing SDK + 平台，强调无厂商锁定，云版 SOC 2 Type II 认证，可自托管。</p>
+<p><strong>Traceloop 平台</strong> — OpenLLMetry（开源，7,200+ stars）背后公司的商业托管层，补充仪表盘、告警与可靠性监控；因数据是纯 OTel 格式，可无缝转发 Datadog/New Relic/Honeycomb。</p>
+<p><strong>Honeycomb</strong> — 通用 OTel 观测厂商，无专门 LLM 产品线，但凭高基数事件分析 + OpenLLMetry/GenAI 语义约定摄入，成为"复用现有观测栈"路线的代表。闭源 SaaS。</p>
+<h3 id="_2">已退场（警示案例）</h3>
+<p><strong>Literal AI</strong>（Chainlit 团队）— 曾是协作式观测+评测平台，2025-10-31 正式停服、数据删除，仅留开源 Data Layer；Chainlit 本体也转入社区维护。是该赛道整合出清的典型样本。</p>
+<h3 id="_3">全景分类总结</h3>
+<p>结合已覆盖工具，整个领域可分七类：<strong>(1) 全栈 LLM 工程平台</strong>（trace+eval+prompt 一体）：LangSmith、Langfuse、Braintrust、W&amp;B Weave、Opik、HoneyHive、Vellum、Maxim、LangWatch；<strong>(2) 网关/代理式观测</strong>：Helicone、Portkey、Keywords AI、TrueFoundry；<strong>(3) Agent 原生观测</strong>：AgentOps、Laminar、Lunary、Latitude；<strong>(4) 开放标准与插桩层</strong>：OTel GenAI 语义约定、OpenLLMetry/Traceloop、OpenInference/Phoenix、Langtrace——三套语义约定仍在竞争；<strong>(5) 评测优先/护栏</strong>：Galileo、promptfoo、DeepEval/Confident AI；<strong>(6) APM 厂商延伸</strong>：Datadog、New Relic、Honeycomb；<strong>(7) 开发期调试 UI</strong>：LangGraph Studio、ADK Web。2026 年的两条主线：一是行业加速整合（Langfuse 于 2026-01 被 ClickHouse 收购，Helicone 于 2026-03 被 Mintlify 收购后转维护模式，Literal AI 停服），二是选型标准趋同——OTel 原生、评测与观测耦合、能把失败 trace 聚类成可修复问题的平台胜出；市场规模约 $2.69B（2026），预计 2030 年达 $9.26B。</p>
+<h3 id="sources">Sources</h3>
+<ul>
+<li><a href="https://www.confident-ai.com/knowledge-base/compare/10-llm-observability-tools-to-evaluate-and-monitor-ai-2026">Confident AI: 10 LLM Observability Tools 2026</a></li>
+<li><a href="https://mlflow.org/articles/top-llm-observability-tools-in-2026-a-pro-guide/">MLflow: Top LLM Observability Tools in 2026</a></li>
+<li><a href="https://latitude.so/blog/best-ai-agent-observability-tools-2026-comparison">Latitude: Best AI Agent Observability Tools 2026</a></li>
+<li><a href="https://latitude.so/blog/15-ai-agent-observability-platforms-2026-agentic-complexity">Latitude: 15 AI Agent Observability Platforms 2026</a></li>
+<li><a href="https://github.com/portkey-ai/gateway">Portkey Gateway (GitHub)</a></li>
+<li><a href="https://www.prnewswire.com/news-releases/galileo-announces-free-agent-reliability-platform-302508172.html">Galileo: Free Agent Reliability Platform (PR Newswire)</a></li>
+<li><a href="https://docs.galileo.ai/concepts/luna/luna">Galileo Luna-2 Docs</a></li>
+<li><a href="https://github.com/traceloop/openllmetry">Traceloop / OpenLLMetry (GitHub)</a></li>
+<li><a href="https://www.traceloop.com/docs/openllmetry/integrations/honeycomb">Traceloop: Honeycomb 集成</a></li>
+<li><a href="https://github.com/langwatch/langwatch">LangWatch (GitHub)</a></li>
+<li><a href="https://www.getmaxim.ai/">Maxim AI 官网</a></li>
+<li><a href="https://www.vellum.ai/products/monitoring">Vellum Observe</a></li>
+<li><a href="https://docs.literalai.com/more/migration-guide">Literal AI Migration Guide</a></li>
+<li><a href="https://www.firecrawl.dev/blog/best-llm-observability-tools">Firecrawl: Best LLM Observability Tools 2026</a></li>
+<li><a href="https://www.braintrust.dev/articles/best-llm-gateways-observability-2026">Braintrust: Best LLM Gateways for Observability 2026</a></li>
+</ul>
+<h2 id="2">2. 工具深度档案</h2>
+<blockquote>
+<p>每份档案结构固定：定位理念 / 数据模型 / 功能清单 / 接入实现 / 自托管架构 / HITL / 借鉴要点。全部事实经独立核验代理反驳式核查；被反驳的条目已在档案末尾以「核验修正」标注订正。</p>
+</blockquote>
+<h3 id="21-langsmith-langchain">2.1 LangSmith (LangChain)</h3>
+<p><strong>类别</strong>：tracing平台 / LLM可观测+评测一体化平台（闭源商业SaaS+自托管企业版）</p>
+<h4 id="_4">定位与设计理念</h4>
+<p>LangSmith 是 LangChain 官方的 LLM 应用「可观测 + 评测 + 提示词工程」一体化平台，覆盖从开发调试、离线回归测试到生产监控的全生命周期。核心取舍：<strong>闭源商业产品</strong>（SaaS 为主，自托管是 Enterprise 计划附加项、需 license key），换取深度打磨的 UI 与开箱即用体验；框架无关（不必用 LangChain，可用 SDK 装饰器或纯 OTel 接入），但与 LangChain/LangGraph 集成最深。一句话哲学：<strong>"trace 是一切的原料"</strong>——先把每一步执行记录成结构化 Run 树，再在其上叠加反馈、评测、数据集、监控，形成 online→offline 的闭环（生产 trace 一键入 dataset，dataset 跑 experiment，评分回流监控）。</p>
+<h4 id="_5">数据模型</h4>
+<p>层级为 <strong>Project（tracing project，内部字段名 session_id）→ Trace → Run</strong>，多轮对话用 <strong>Thread</strong> 把多条 trace 串起来（通过 metadata 中的 <code>session_id</code>/<code>thread_id</code>/<code>conversation_id</code> 键关联）。
+- <strong>Run（= OTel span 概念）</strong> 是核心实体，字段非常具体：<code>id</code>(UUID)、<code>name</code>、<code>inputs</code>/<code>outputs</code>(对 llm run 通常是 messages 数组)、<code>run_type</code>、<code>start_time</code>/<code>end_time</code>、<code>error</code>、<code>status</code>(success/error/pending)、<code>events</code>(流式事件)、<code>tags</code>、<code>extra</code>(含 metadata)、<code>trace_id</code>(即根 run 的 id)、<code>parent_run_id</code>、<code>child_run_ids</code>、<code>feedback_stats</code>、<code>reference_example_id</code>(评测运行关联的数据集样例)、token/成本字段（<code>prompt_tokens</code>/<code>completion_tokens</code>/<code>total_tokens</code>、<code>prompt_cost</code>/<code>completion_cost</code>/<code>total_cost</code>、<code>first_token_time</code>）、<code>in_dataset</code>、<code>session_id</code>(所属项目)。
+- <strong>run_type</strong> 枚举：<code>chain</code>(默认)、<code>llm</code>、<code>tool</code>、<code>retriever</code>、<code>embedding</code>、<code>prompt</code>、<code>parser</code>——语义标签，决定 UI 渲染（llm 显示 token/延迟，retriever 显示文档列表）与统计归类。
+- <strong>dotted_order</strong>：独特设计，一个可排序字符串 <code>&lt;start_time&gt;Z&lt;uuid&gt;.&lt;child_start&gt;Z&lt;child_uuid&gt;...</code>，单字段完整编码了 run 在树中的位置与时间序，前缀即祖先链，直接按字典序排序就得到树的先序遍历。
+- <strong>Feedback（score）</strong>：绑定到 run id 的评分记录，<code>key</code>(指标名) + <code>score</code>(数值) 或 <code>value</code>(类别) + <code>comment</code>，人工标注、用户反馈、评测器输出统一走这一实体。
+- <strong>Dataset → Example</strong>（inputs + 可选 reference outputs + metadata）；<strong>Experiment</strong> = 某应用版本在一个 dataset 上的一次评测结果集，可多实验并排对比。SaaS trace 保留 400 天，dataset 永久。</p>
+<h4 id="_6">核心功能清单</h4>
+<ul>
+<li><strong>Trace 视图</strong>：有。树状 trace tree，按 run_type 差异化渲染，逐节点显示 token/成本/延迟聚合。</li>
+<li><strong>会话/线程</strong>：有。Threads 视图按 thread 聚合多轮对话，支持 thread 级成本聚合与 thread 级在线评测（多轮评估）。</li>
+<li><strong>Playground</strong>：有。UI 中直接改 prompt/模型/参数重跑，可从任意 trace 打开、可对 dataset 跑评测；自托管中是独立 playground 服务（代理转发到各 LLM API）。</li>
+<li><strong>Prompt 管理</strong>：有。prompt 模板存储、commit/tag 版本化、f-string/mustache 变量、SDK 拉取，面向非工程角色协作。</li>
+<li><strong>数据集</strong>：有。dataset/example 管理、从生产 trace 或标注队列导出入库、多版本、按 metadata 过滤切分。</li>
+<li><strong>实验对比</strong>：有。experiment 与 dataset 绑定，多实验并排 diff、pairwise 对比。</li>
+<li><strong>评测</strong>：有，双轨制。离线（对 dataset，可比对参考输出）+ 在线（对生产 runs/threads，无参考输出）；评测器类型：代码规则、LLM-as-judge（模板/自定义、few-shot 校正、多模态附件输入）、pairwise、composite；在线评测器支持<strong>过滤器 + 采样率（如 0.1）+ 历史回填</strong>，是 workspace 级资源可复用。</li>
+<li><strong>标注/人工反馈</strong>：有。annotation queues（详见 HITL 节）+ inline 标注 + SDK 提交用户反馈（含 presigned feedback token）。</li>
+<li><strong>监控告警</strong>：有。每项目自动预建 dashboard（Traces/LLM Calls/Cost&amp;Tokens/Tools/Run Types/Feedback Scores 六节，支持按 tag/metadata 分组）+ 自定义 dashboard；Alerts 为项目级阈值告警，指标含 Run Count、Cost、Errors(计数/比率)、Feedback Score、Latency，可按 run_type/tag/error 过滤，路由 Slack/PagerDuty/Dynatrace/任意 webhook。</li>
+<li><strong>成本核算</strong>：有。主流 provider 自动按 token 计价（区分 cache read/reasoning 等子类），支持自定义价格表（price_model_id）与任意 run 的自定义成本上报，trace/项目/dashboard 三级聚合。</li>
+</ul>
+<h4 id="_7">接入与实现方式</h4>
+<p>四种形态并存：1) <strong><code>@traceable</code> 装饰器</strong>（Python/TS/Java/Kotlin），包装任意函数为 run，自动跨嵌套调用传播上下文形成树，可指定 run_type/name/自定义 run id；2) <strong><code>wrap_openai</code>/<code>wrapOpenAI</code> 客户端包装器</strong>，包一层 OpenAI client 即自动记录所有调用；3) <strong><code>trace</code> 上下文管理器</strong>（Python）与低层 <strong>RunTree API</strong>（显式建树，不受 LANGSMITH_TRACING 开关控制）；4) <strong>框架集成</strong>即自动埋点（LangChain/LangGraph/OpenAI/Anthropic/CrewAI 等）。埋点原理是 SDK 内在进程内维护 run tree 上下文并<strong>批量异步 POST 到 LangSmith ingest API</strong>，环境变量 <code>LANGSMITH_TRACING</code>/<code>LANGSMITH_API_KEY</code>/<code>LANGSMITH_PROJECT</code> 控制。
+<strong>与 OTel 的关系</strong>：双向兼容而非 OTel 原生。平台暴露 <strong>OTLP ingest 端点</strong> <code>https://api.smith.langchain.com/otel</code>（自托管为 <code>&lt;host&gt;/api/v1/otel</code>，可能需追加 <code>/v1/traces</code>），header 用 <code>x-api-key</code> 认证、<code>Langsmith-Project</code> 指定项目；识别 GenAI 语义约定 <code>gen_ai.*</code> 属性，并用自有属性 <code>langsmith.span.kind</code>、<code>langsmith.metadata.*</code> 映射到 run 模型。反向可设 <code>LANGSMITH_OTEL_ENABLED=true</code> 让 LangChain 应用经 OTel 协议导出，并可经 OTel Collector 扇出到多后端。</p>
+<h4 id="_8">自托管与后端架构</h4>
+<p>仅企业版可自托管（license key），<strong>闭源</strong>，Helm 装到 Kubernetes（GKE/EKS/AKS/OpenShift，官方提供 AWS/Azure Terraform 模块）。组件（与官方文档逐一对应）：
+- <strong>frontend</strong>：Nginx，服务 UI 并路由 API，唯一必须暴露的入口；
+- <strong>backend</strong>：CRUD API 主入口，业务逻辑、trace 预处理、hub API；
+- <strong>platform backend</strong>：认证、<strong>run ingestion</strong> 等高吞吐路径；
+- <strong>queue（worker）</strong>：异步消费 trace/feedback，做完整性校验、入库与失败重试；
+- <strong>playground</strong> 服务：转发 LLM 请求；<strong>ACE backend</strong>：沙箱内执行任意代码（支撑自定义代码评测器）。
+存储：<strong>ClickHouse</strong> 存 trace 与 feedback（高容量 OLAP，UI 性能关键）；<strong>PostgreSQL</strong> 存其余事务性/运营数据；<strong>Redis（官方支持 Valkey 替换）</strong> 做队列与缓存；<strong>Blob storage（S3/GCS/Azure Blob，生产强烈推荐）</strong> 存大对象（inputs/outputs 落 S3 后 run 上只留 <code>inputs_s3_urls</code> 引用）。默认全部内置打包，生产建议全部外接托管服务。可选叠加 LangSmith Deployment（control plane + data plane）部署 agent。</p>
+<h4 id="hitl">人工介入与 HITL</h4>
+<ul>
+<li><strong>标注队列（annotation queues）</strong>：功能最完整的部分。两种队列：单 run 队列（一次审一条，配 rubric 指标 + 说明 + assertions 验收条件）与 <strong>pairwise 队列</strong>（两个 run 并排选优）。协作机制很细：run 预留锁（reservation + 超时释放）、每 run 需 N 个审阅人、指定审阅人（Needs Review → Needs Others' Review → Completed 三态）、审阅人互相看不到对方评分（防偏置）但共享评论、审完一键导出到 dataset。支持 SDK 编程管理。</li>
+<li><strong>审计</strong>：evaluator 评分可人工审计修正（audit evaluator scores），few-shot 修正样例可回喂 LLM 评审。</li>
+<li><strong>断点/状态编辑/审批流</strong>：<strong>无</strong>。LangSmith 作为观测平台不提供 agent 运行时断点或 state 编辑——这属于 LangGraph（interrupt/checkpoint）的能力范畴；LangSmith 侧的"人工介入"是事后标注与 Playground 修改重跑，未核实其 Deployment 附加组件 UI 中的 agent 交互能力细节。</li>
+</ul>
+<h4 id="_9">值得借鉴的点</h4>
+<ol>
+<li><strong>dotted_order 排序键</strong>：用 <code>时间戳Z+UUID</code> 点分级联串编码整棵 run 树，ClickHouse 里按此单列排序即可还原树形与时序，无需递归查询。Go 平台若用 ClickHouse 存 span，直接抄这个设计做主排序键，树展开查询变成前缀扫描。</li>
+<li><strong>run_type 语义枚举（llm/chain/tool/retriever/…）</strong>：仅 7 个值却驱动了 UI 差异渲染、dashboard 自动分节（LLM Calls/Tools/Run Types）、告警过滤。比开放式 span kind 更可控，建议在 trpc-agent-go 的 span 属性上定义同等枚举并贯穿到查询层。</li>
+<li><strong>OTLP 端点 + 自有属性命名空间</strong>：不重造协议，直接收 OTLP，用 <code>x-api-key</code> header 认证、<code>langsmith.span.kind</code>/<code>langsmith.metadata.*</code> 属性 + <code>gen_ai.*</code> 语义约定映射到内部模型。Go 生态 OTel 是事实标准，这是接入成本最低的路径，且天然兼容 Collector 扇出。</li>
+<li><strong>feedback 统一实体</strong>：人工标注、终端用户反馈、在线 LLM 评审、离线评测器输出全部收敛为 <code>{key, score|value, comment}</code> 绑定 run id 一张表，dashboard/告警/实验对比全部消费同一数据，避免评测与监控两套评分体系。</li>
+<li><strong>在线评测器 = 过滤器 + 采样率 + 回填</strong>：把"对生产流量跑 LLM 评审"产品化成三个旋钮（run 过滤条件、采样比例控成本、历史回填补数据），并作为 workspace 级资源跨项目复用，实现成本可控且立即可用。</li>
+<li><strong>写路径架构</strong>：ingest 由高吞吐 platform-backend 收下后进 Redis 队列，worker 异步校验、重试、批量写 ClickHouse，大 payload 卸载到 blob storage 只存引用。这套「热路径只做 append、OLAP 与事务数据分库（ClickHouse + Postgres）」的分工是 trace 平台被反复验证的形态（Langfuse v3 同构），Go 实现时值得直接采用。</li>
+</ol>
+<h3 id="22-langfuse">2.2 Langfuse</h3>
+<p><strong>类别</strong>：tracing平台（LLM 工程平台：观测 + Prompt 管理 + 评测一体化）</p>
+<h4 id="_10">定位与设计理念</h4>
+<p>Langfuse 自我定位为「开源 LLM 工程平台」，帮团队协作地开发、监控、评测、调试 AI 应用（README 原话）。它不是运行时框架，而是应用旁路的数据平台：把 tracing（调试与监控）、prompt 管理（部署与迭代）、评测（scores/datasets/experiments/LLM-as-judge/人工标注）三件事装进同一套数据模型，用「trace ↔ prompt 版本 ↔ score ↔ dataset item」的互相引用形成闭环——线上看到坏 case，一键进 playground 改 prompt、加进 dataset 回归。核心取舍：(1) 摄取路径极端强调「不拖慢宿主应用」——SDK 全异步批量、后端先落 S3 再异步入库；(2) 自托管与 Cloud 完全同一套代码和 schema，避免锁定；(3) 2025-2026 年全面转向 OTel 标准而非私有协议。一句话哲学：以开放标准（OTel、MIT、开放 API）承载 LLM 应用的全生命周期数据。</p>
+<h4 id="_11">数据模型</h4>
+<ul>
+<li><strong>Trace</strong>：代表一次请求/操作，是 observations 的容器；<code>user_id</code>、<code>session_id</code>、<code>tags</code>、<code>metadata</code>、<code>environment</code>、<code>release/version</code> 等属性会传播到 trace 内所有 observations。</li>
+<li><strong>Observation</strong>：trace 内的单步，可任意嵌套（Trace 1—n Observation，Observation 自嵌套）。类型有 10 种：<code>event</code>（离散事件）、<code>span</code>（时长单元）、<code>generation</code>（LLM 调用，含 prompt、token 用量与成本）、<code>agent</code>、<code>tool</code>、<code>chain</code>、<code>retriever</code>、<code>evaluator</code>、<code>embedding</code>、<code>guardrail</code>。generation/embedding 上可记录 <code>usage_details</code>（任意 usage type 字符串，如 input/output/cached_tokens）与 <code>cost_details</code>（USD），未提供时按 model 名推断（内置模型价目 + tokenizer，可自定义 model 定义）。</li>
+<li><strong>Session</strong>：可选地把多条 trace 聚成一个会话（如聊天线程），Session 1—n Trace。</li>
+<li><strong>Score</strong>：评测结果对象。字段：<code>id/name/value(数值)/stringValue/dataType(NUMERIC|CATEGORICAL|BOOLEAN|TEXT)/source(API|EVAL|ANNOTATION)/comment/configId</code>，且<strong>每个 Score 恰好引用 Trace、Observation、Session、DatasetRun 四者之一</strong>。可选绑定不可变的 <strong>ScoreConfig</strong>（name、dataType、min/max 或类别枚举）保证团队打分 schema 一致。</li>
+<li><strong>Dataset 族</strong>：<code>Dataset</code>(name/description/metadata/remoteExperimentUrl) 1—n <code>DatasetItem</code>(input/expectedOutput/metadata/sourceTraceId/sourceObservationId/status=ACTIVE|ARCHIVED，按 id upsert)；<code>DatasetRun</code>（=Experiment run）1—n <code>DatasetRunItem</code>(datasetItemId + traceId[+observationId 仅向后兼容])，即每个 run item 把一条 dataset item 和一条真实 trace 连起来，Score 再挂到 trace 或 run 上。</li>
+<li><strong>Prompt</strong>：name + type(text|chat) + prompt 内容 + config；<strong>version 不可变递增，label（production/latest/自定义）是指向版本的可移动指针</strong>，代码引用 label 实现零代码发布/回滚。</li>
+<li>时效注意：2026 年 4 月起的「Fast Preview / v4」把模型改为 <strong>observations-first</strong>——trace 退化为关联 ID，trace 级属性必须写到每个 observation 上以支持高效聚合。</li>
+</ul>
+<h4 id="_12">核心功能清单</h4>
+<ul>
+<li><strong>Trace 视图</strong>：有。嵌套树状 observation 视图、全文检索、agent graph 可视化、多模态（大文件走 S3 直传）、log levels、comments。</li>
+<li><strong>会话/线程</strong>：有。Sessions 分组 + 会话级视图与会话级 Score。</li>
+<li><strong>Playground</strong>：有。多 prompt 变体并排对比执行，各自独立模型参数/变量/工具定义；可从 trace 里的 generation 直接跳入，改完可存回 Prompt 管理。</li>
+<li><strong>Prompt 管理</strong>：有。版本 + labels、变量、prompt 引用组合（composability）、message placeholders、A/B 测试、folders、webhooks/Slack、GitHub 集成、MCP server；客户端缓存 + 服务端 Redis 缓存 + fallback prompt 保证可用性。</li>
+<li><strong>数据集</strong>：有。支持从生产 trace 一键转 dataset item（sourceTraceId 溯源）、媒体引用、UI/SDK/API 管理。</li>
+<li><strong>实验对比</strong>：有。DatasetRun 之间的对比视图；SDK 侧定义 task/evaluator/run-evaluator 函数跑实验，支持 CI/CD；本地 dataset 跑实验目前只产生 trace、不生成 run（roadmap 中）。</li>
+<li><strong>评测</strong>：有。四种方法：LLM-as-a-Judge（托管 judge，可跑在 observation/trace/experiment 三个层面，产出带 reasoning 的 Score）、代码 evaluator、SDK/API 打分、UI 人工打分。</li>
+<li><strong>标注/人工反馈</strong>：有。Annotation Queues（详见 HITL 节）、user feedback 采集、Corrections（更正输出）。</li>
+<li><strong>监控告警</strong>：部分。自定义 dashboards 与 Metrics API 开源可用；<strong>Monitors and Alerts（阈值告警，通知到 Slack/GitHub Actions/Webhook）仅 Langfuse Cloud 提供</strong>。另有 Cloud 的 spend alerts。</li>
+<li><strong>成本核算</strong>：有。ingested 优先、否则按模型价目+tokenizer 推断；按 usage type 细分；Metrics API 可按 user/tag 聚合用于计费限流。</li>
+</ul>
+<h4 id="_13">接入与实现方式</h4>
+<ul>
+<li><strong>SDK 现状（2026-07）</strong>：Python SDK <strong>v4</strong> 与 JS/TS SDK <strong>v5</strong> 为当前版本，均为 <strong>OTel 原生</strong>——SDK 是官方 OpenTelemetry client 之上的薄层，把 OTel span 自动转换为 Langfuse observation 类型，并加 LLM 特有 helper（token 用量、成本、prompt 关联、打分）。Python v3（首个 OTel 化版本）与 JS v4 已是 legacy 文档。</li>
+<li><strong>埋点形态齐全</strong>：Python <code>@observe()</code> 装饰器 / context manager / 手动 observation；JS <code>startActiveObservation</code> context manager、observe wrapper、<code>LangfuseSpanProcessor</code> 注入 NodeSDK；OpenAI SDK drop-in 替换、LangChain callback、LlamaIndex/Vercel AI SDK 等框架集成。</li>
+<li><strong>异步导出</strong>：SDK 本地批量、后台定时/按批发送，短生命周期进程必须显式 <code>flush()</code>/<code>shutdown()</code> 否则丢数据。</li>
+<li><strong>与 OTel 的关系</strong>：Langfuse 后端可直接充当 OTel backend，在 <code>/api/public/otel</code> 接收 <strong>OTLP</strong> trace——这是 Go/Java 等无官方 SDK 语言的接入路径（配合 OpenLLMetry/OpenLIT）。后端做 OTel GenAI 语义约定 → Langfuse 数据模型的属性映射（<code>langfuse.user.id</code>、<code>langfuse.session.id</code>、<code>langfuse.trace.tags</code> 等）。关键坑：trace 级属性需传播到<strong>每个 span</strong>（推荐 OTel Baggage + BaggageSpanProcessor，或 SDK 的 <code>propagate_attributes()</code>）；采用 v4 observations-first 语义需在 exporter 上加 <code>x-langfuse-ingestion-version: 4</code> header。默认只导出 LLM 相关 span（gen_ai.* 属性、已知 instrumentor），可自定义 filter 放开。</li>
+</ul>
+<h4 id="_14">自托管与后端架构</h4>
+<ul>
+<li><strong>组件</strong>（v3 架构）：两个应用容器——<strong>Langfuse Web</strong>（UI+API）与 <strong>Langfuse Worker</strong>（异步事件处理）；存储四件套——<strong>Postgres</strong>（OLTP 事务数据）、<strong>ClickHouse</strong>（OLAP，存 traces/observations/scores）、<strong>Redis/Valkey</strong>（缓存+队列）、<strong>S3/Blob</strong>（原始事件、多模态附件、大导出）；可选外部 LLM API/Gateway（playground 与 evals 用）。</li>
+<li><strong>摄取管线</strong>：Web 批量收 trace → <strong>立即写 S3，Redis 只存引用排队</strong> → Worker 从 S3 取出写入 ClickHouse。好处：削峰、数据库故障可恢复（事件先持久化于 S3）。API key 与 prompt 均有 Redis read-through 缓存。所有组件要求 UTC 时区。</li>
+<li><strong>部署形态</strong>：docker compose（低规模）、Kubernetes Helm（生产推荐）、AWS/Azure/GCP Terraform、Railway；semver tagged releases，长迁移做成后台任务减少升级停机。</li>
+<li><strong>协议</strong>：仓库整体 <strong>MIT</strong>，仅 <code>ee/</code>、<code>web/src/ee/</code>、<code>worker/src/ee/</code> 目录为商业 license（需 license key 才能运行，源码随仓库分发）。官方明确：tracing、评测、prompt 管理、experiments、标注、playground 等<strong>全部产品功能均 MIT 无限制</strong>；EE 仅覆盖 SCIM、审计日志、数据保留策略等企业安全能力。自托管默认向 PostHog 上报匿名遥测，<code>TELEMETRY_ENABLED=false</code> 可关。</li>
+</ul>
+<h4 id="hitl_1">人工介入与 HITL</h4>
+<p>Langfuse 是旁路观测平台，<strong>无 agent 运行时断点/暂停恢复/状态编辑</strong>能力（不在其定位内）。人工介入体现在数据侧：(1) <strong>Annotation Queues</strong>——建队列时绑定 ScoreConfig 定义打分维度，可批量把 trace/observation/session 加入队列并指派用户，专家逐条打分+评论，全键盘快捷键操作，队列可经 API 管理以便自建标注 UI；(2) <strong>Corrections</strong>——在 trace/observation 上录入「模型本应输出什么」，带 diff 视图，可导出做微调数据；(3) user feedback 作为 <code>source=API</code> 的 Score 摄入；(4) comments 协作。无原生审批流（prompt label 变更有 webhook 可自行串审批；「protected labels」是否存在未核实）。</p>
+<h4 id="go-agent">值得借鉴的点（面向 Go Agent 测试平台）</h4>
+<ol>
+<li><strong>Score 的四向单引用设计</strong>：一个统一的 Score 实体（数值/类别/布尔/文本 + source 枚举 API/EVAL/ANNOTATION + 可选 ScoreConfig schema 约束），恰好挂在 trace/observation/session/dataset-run 之一上。人工反馈、LLM judge、代码断言全部收敛为同一张表，对比分析零成本——比给每种评测各建一套结果表干净得多。</li>
+<li><strong>DatasetRunItem 把「测试用例」和「真实 trace」连成一条边</strong>：实验跑的每个 case 就是一条带完整 observation 树的生产级 trace，失败用例可直接下钻调试；反向又能从生产坏 case 经 sourceTraceId 一键入库成回归用例。Go 平台可直接复刻这四张表（Dataset/Item/Run/RunItem）。</li>
+<li><strong>OTLP 端点 + 属性映射层做兼容面</strong>：自研 SDK 之外提供 <code>/api/public/otel</code>，把 OTel GenAI 语义约定映射进自己的数据模型。trpc-agent-go 已有 OTel 支持的话，这是接入成本最低、生态最广的方案；注意学它「trace 级属性用 Baggage 传播到所有 span」的做法，否则 OLAP 聚合查询没法只扫 span 表。</li>
+<li><strong>「先落对象存储、队列只传引用」的摄取管线</strong>：Web 收到批量事件立即写 S3、Redis 排队引用、Worker 异步入 ClickHouse。天然削峰 + 事件可重放 + 大 payload（多模态）不过队列。Go 生态实现同样简单（S3 + asynq/river + ClickHouse）。</li>
+<li><strong>prompt 的 version（不可变）+ label（可移动指针）+ 客户端 stale-while-revalidate 缓存</strong>：发布/回滚=移动 label，不改代码不加延迟；SDK 端 TTL 过期先返回旧值后台刷新，再配 fallback prompt 兜底可用性。这套语义对 agent 的 system prompt / 工具描述管理同样适用。</li>
+<li><strong>observations-first 的教训（v4）</strong>：Langfuse 2026 年被迫重构——trace/observation 双实体在 agent 场景下 join 太贵，改为只有 observation、trace 退化为关联 ID、trace 属性冗余到每行。新平台设计 ClickHouse 表时可一步到位：宽表、按 span 存、聚合属性列冗余。</li>
+</ol>
+<h3 id="23-arize-phoenix-openinference">2.3 Arize Phoenix + OpenInference</h3>
+<p><strong>类别</strong>：tracing平台（OTel-native LLM 可观测 + 评测一体化，附带独立语义规范 OpenInference）</p>
+<h4 id="_15">定位与设计理念</h4>
+<p>Phoenix 是 Arize 开源的 AI 可观测与评测平台，面向 LLM 应用/Agent 的调试、评估与迭代，覆盖开发—测试—生产全流程（生产侧深度功能引流到商业产品 Arize AX）。核心取舍是「collector 即产品」：Phoenix 自身就是一个 OTLP trace collector（HTTP + gRPC）加 Web UI，应用侧只需标准 OpenTelemetry SDK + OpenInference 语义约定即可接入，不绑定任何框架或语言。一句话哲学：<strong>用 OTel 标准管道收数，把 LLM 领域语义（OpenInference）、评测、数据集、Prompt 工程全部叠在同一个单容器产品里，自托管零门槛、无功能阉割</strong>。Phoenix 采用 Elastic License 2.0（ELv2，非 OSI 认证但自托管完全免费、无 feature gate）；配套的 OpenInference 规范与 instrumentor 生态则是 Apache-2.0，刻意让「标准层」比「产品层」更开放。</p>
+<h4 id="_16">数据模型</h4>
+<ul>
+<li><strong>Project</strong>：trace 的容器，用于隔离环境（dev/prod）、隔离评测运行等；每个 project 自带指标 dashboard。</li>
+<li><strong>Trace / Span</strong>：标准 OTel 模型（trace_id/span_id/parent_id/start·end_time/status/attributes/events）。OpenInference 要求每个 span 带 <code>openinference.span.kind</code>，取值：<code>LLM</code>、<code>EMBEDDING</code>、<code>CHAIN</code>、<code>RETRIEVER</code>、<code>RERANKER</code>、<code>TOOL</code>、<code>AGENT</code>、<code>GUARDRAIL</code>、<code>EVALUATOR</code>、<code>PROMPT</code> 十种。LLM span 的关键属性是扁平化索引式命名：<code>llm.input_messages.0.message.role</code>、<code>llm.model_name</code>、<code>llm.invocation_parameters</code>、<code>llm.token_count.prompt/completion/total</code>（含 <code>prompt_details.cache_read/cache_write/audio</code> 等细分）、<code>llm.cost.prompt/completion/total</code>（USD）、<code>llm.tools.N.tool.json_schema</code>、<code>llm.prompt_template.template/variables/version</code>；检索文档用 <code>document.id/content/score/metadata</code>。</li>
+<li><strong>Session</strong>：通过 span 属性 <code>session.id</code>（另有 <code>user.id</code>）把多轮对话的多条 trace 串成一个会话线程，UI 以聊天视图展示每轮输入输出，并按会话聚合 token 与延迟。</li>
+<li><strong>Annotation</strong>（评分/反馈的统一实体）：可附着于 span、trace、session、document（文档级用于检索评测），字段为 <code>label</code>（分类）+ <code>score</code>（数值）+ <code>explanation</code>（解释）；annotation type 分 categorical / continuous / freeform，带优化方向（maximize/minimize/none）；annotator kind 分 <strong>Human / LLM / Code</strong> 三类。</li>
+<li><strong>Dataset / Example / Experiment</strong>：Example = <code>input</code> + 可选 <code>output</code>(reference) + <code>metadata</code>，数据集有版本；Experiment = 对数据集逐例跑 task（LLM/Agent/App）产出 output，再由 Evaluator 打出 Score/Annotation。span 转入数据集时其属性与 annotation 会传播到 example metadata。</li>
+<li><strong>Score</strong>（evals SDK 的统一输出）：<code>name</code>、<code>kind</code>(llm/code/human)、<code>direction</code>、可选 <code>score</code>/<code>label</code>/<code>explanation</code>/<code>metadata</code>。</li>
+</ul>
+<h4 id="_17">核心功能清单</h4>
+<ul>
+<li><strong>Trace 视图</strong>：有。瀑布式 span 树、按 span kind 着色、输入输出/属性/事件详情、检索文档展开。</li>
+<li><strong>会话/线程</strong>：有。Sessions 功能，聊天式 UI、会话内搜索、会话级 token/延迟统计。</li>
+<li><strong>Playground</strong>：有。Prompt Playground 支持多模型对比（OPENAI/ANTHROPIC/GOOGLE/AWS 等 14 家 provider，可用 <code>PHOENIX_ALLOWED_PROVIDERS</code> 白名单限制）、调 invocation 参数、对数据集批量跑 prompt，且 playground 运行本身产生 trace/experiment。特色功能 <strong>Span Replay</strong>：从已收集的 LLM span 一键回放该次调用并改参重试。</li>
+<li><strong>Prompt 管理</strong>：有。版本控制、tag、SDK 拉取（prompts in code）、prompt 模板/变量/版本可埋进 trace（<code>llm.prompt_template.*</code>）。</li>
+<li><strong>数据集</strong>：有。版本化，可从生产 trace、标注、CSV/手工构建，支持导出用于微调。</li>
+<li><strong>实验对比</strong>：有。experiment 绑定数据集版本，评估器自动打分，UI 中对比多次 run、下钻 good/bad 例子。</li>
+<li><strong>评测</strong>：有，双轨。① 客户端 evals SDK（Python + TypeScript）：LLM-as-a-judge 与 code evaluator（exact match/regex/Levenshtein），预置 RAG（faithfulness/幻觉、相关性）与 tool-calling agent 等指标，判分用 <strong>tool calling 强制结构化输出</strong>（label+explanation），内置 executor 做限流重试与动态并发；② 服务端 evals：在 UI 里配置评估器挂到数据集，实验结果自动打分。所有评估器运行本身被 OTel 追踪，落入专门 project（评估器可解释、可再评估）。检索专项指标：NDCG、Precision@K、Hit Rate。</li>
+<li><strong>标注/人工反馈</strong>：有。UI 标注（hotkey 快捷打分）、REST API 上报最终用户 👍/👎、annotation 配置化（类型/范围/方向）。</li>
+<li><strong>监控告警</strong>：部分。每个 project 自带预置 metrics dashboard（trace 量、延迟分位、成本、top models、token 细分、LLM/Tool span 错误率、annotation 均分）；可选开 Prometheus 指标（9090 端口）；<strong>内置告警：无</strong>（文档明确把 alerting/在线评估阈值告警指向 Arize AX）。</li>
+<li><strong>成本核算</strong>：有。基于 token 数 + 内置模型价格表自动算 USD 成本，支持 Settings &gt; Models 自定义价格，成本上卷到 trace/project；语义约定含 <code>llm.cost.*</code> 全套（含 cache 读写、reasoning、audio 细分）。</li>
+<li>另有：数据保留策略（全局/每 project）、RBAC、OAuth2/LDAP 认证、embedding 可视化、PXI（内置 AI 调试 agent）、代码执行沙箱（WASM/DENO/E2B 等）。</li>
+</ul>
+<h4 id="_18">接入与实现方式</h4>
+<p>埋点原理 = <strong>纯 OpenTelemetry</strong>：应用用 OTel SDK 产 span，经 OTLP（HTTP <code>/v1/traces</code> 或 gRPC 4317，Protobuf）发给 Phoenix，Phoenix 同时是 collector 和存储/UI，无需独立 otel-collector。领域语义由 <strong>OpenInference</strong> 承担——它自称「与 OpenTelemetry 互补的一组约定和插件」，不是替代 OTel，而是在 OTel span attributes 上定义 LLM 专属键值（区别于 OTel 官方 GenAI semconv 的 <code>gen_ai.*</code> 命名；OpenInference 用 <code>llm.*</code>/<code>openinference.span.kind</code>，且消息列表用扁平化索引属性而非 event）。SDK 形态：① <strong>auto-instrumentor 生态</strong>（主力）：Python 30+ 包、JS/TS 13+ 包，另有 Java（Spring AI、LangChain4j）与 <strong>Go</strong> 的 instrumentation，覆盖 OpenAI、Anthropic、LangChain、LlamaIndex、Claude Agent SDK、MCP 等，一行 <code>instrument()</code> 挂 monkey-patch/回调；② 手动埋点：直接按语义约定写 OTel span；③ Phoenix 的 <code>register()</code> 帮助函数简化 tracer provider 配置。因为全链路是标准 OTLP，OpenInference 数据也可以发给任何 OTel collector/后端，Phoenix 也就天然能接任何语言（包括 Go）的 OTel SDK。</p>
+<h4 id="_19">自托管与后端架构</h4>
+<ul>
+<li><strong>形态</strong>：单容器（<code>arizephoenix/phoenix</code> Docker 镜像，含 nonroot/debug 变体），一个进程同时提供 Web UI（6006）、OTLP HTTP collector（6006 <code>/v1/traces</code>）、OTLP gRPC collector（4317）、可选 Prometheus 指标（9090）。部署路径：pip/CLI 直跑、Docker/Compose、Kubernetes/Helm、AWS CloudFormation、Railway 一键部署，也可跑在 notebook 里。</li>
+<li><strong>存储</strong>：默认 <strong>SQLite</strong>（不配置时落临时目录，生产建议把 <code>PHOENIX_WORKING_DIR</code> 指向持久卷）；生产切 <strong>PostgreSQL ≥14</strong>（<code>PHOENIX_SQL_DATABASE_URL</code> 或 PHOENIX_POSTGRES_<em> 环境变量，支持自定义 schema），v14.0 起支持只读副本（<code>PHOENIX_SQL_DATABASE_READ_REPLICA_URL</code>）。</em><em>无 Redis、无独立 worker/队列</em>*——评测重活由客户端 SDK executor 或容器内进程承担。</li>
+<li><strong>协议/License</strong>：Phoenix 主仓 ELv2（自托管免费、无功能限制、可完全离线 air-gap，遥测可关）；OpenInference 规范与 instrumentors Apache-2.0。代码主体 Python（~45%）+ TypeScript（~40%）。</li>
+<li>企业能力内置：OAuth2/LDAP/本地账号、RBAC、每 project 数据保留策略（<code>PHOENIX_DEFAULT_RETENTION_POLICY_DAYS</code>）、CSRF/SSRF 防护配置、反向代理子路径支持。</li>
+</ul>
+<h4 id="hitl_2">人工介入与 HITL</h4>
+<p>Phoenix 是「事后观测型」HITL：<strong>无运行时断点、无 agent 状态编辑、无审批流</strong>（它不介入应用执行路径，这点与带 interrupt/checkpoint 的编排框架不同）。人工介入手段集中在标注闭环：UI 人工标注（categorical/continuous/freeform + hotkey 高速标注，标注配置可定义标签集与分值范围）、API 收集终端用户反馈、LLM judge 自动标注三者共用同一 annotation 模型。文档未见独立的「标注队列/任务分发」实体（未核实是否有隐藏的 queue 功能）。闭环设计突出：annotation 随 span 传播进 dataset example metadata → 实验时评估器可读取历史标注对比改进/回归 → 人工标注集可用于训练/校准 LLM judge（配 DSPy/Zenbase）。</p>
+<h4 id="_20">值得借鉴的点</h4>
+<ol>
+<li><strong>「collector 即产品」的单二进制架构</strong>：一个进程 = OTLP gRPC/HTTP 接收端 + 存储 + UI，默认 SQLite、生产换 Postgres、无队列无 Redis。Go 平台照抄成本极低（Go 单二进制天然契合），把「docker run 一条命令起平台」做成第一卖点。</li>
+<li><strong>领域语义放在 span attributes、层级只靠 session.id/project 两个弱关联</strong>：不发明私有 trace 协议，trpc-agent-go 已有 OTel 输出的话，只需定义/复用一套 semconv（可直接兼容 OpenInference 的 <code>openinference.span.kind</code> + <code>llm.*</code>，Phoenix 就能白嫖成你的调试 UI），平台侧按属性建索引即可。</li>
+<li><strong>统一 Annotation 实体（label+score+explanation × human/llm/code × span/trace/session/document）</strong>：一张表同时承载人工反馈、LLM judge、代码断言，UI 过滤、dashboard 聚合、数据集传播全部复用，避免「评测结果」「用户反馈」「单测断言」三套模型。</li>
+<li><strong>LLM judge 用 tool calling 强制结构化输出 + 评估器自身被 trace</strong>：判分稳定性和可审计性都解决了；Go 侧实现就是给 judge 调用挂同一套 OTel 埋点，评估 trace 落专门 project。</li>
+<li><strong>Span Replay</strong>：从生产 trace 的任意 LLM span 一键进 playground 改 prompt/参数重放——把「观测」直接变成「调试动作」，是 trace UI 里回报率最高的交互，实现上只需从 span attributes 反解出请求体。</li>
+<li><strong>成本核算走 semconv（<code>llm.token_count.*</code> + <code>llm.cost.*</code>）+ 服务端价格表兜底</strong>：SDK 只报 token 数与模型名，价格表放服务端可更新、可自定义，成本自动上卷 trace/project——比在客户端算钱的方案演进性好得多。</li>
+</ol>
+<h3 id="24-wb-weave">2.4 W&amp;B Weave</h3>
+<p><strong>类别</strong>：tracing平台 + 评测工具（依附 W&amp;B 平台的 LLM/Agent 可观测与评测层）</p>
+<h4 id="_21">定位与设计理念</h4>
+<p>W&amp;B Weave 是 Weights &amp; Biases 推出的 GenAI 应用开发工具包，官方定位为"log and debug language model inputs, outputs, and traces"并"build rigorous, apples-to-apples evaluations"。它把 W&amp;B 在 ML 实验跟踪上的核心理念平移到 LLM 时代：<strong>一切皆版本化对象</strong>——函数（Op）、数据集、模型、Prompt 都自动版本化并可用 ref URI 精确引用，从而让"生产 trace → 评测数据集 → 评测运行 → 对比"形成闭环。核心取舍：不做独立产品，而是深度绑定 W&amp;B 平台（entity/project 组织结构、团队权限、W&amp;B API key），换取与实验跟踪/模型注册的一体化。一句话哲学：<strong>用内容寻址的版本化把"调试观测"和"科学评测"统一在同一套数据模型上</strong>。</p>
+<h4 id="_22">数据模型</h4>
+<p>以 <strong>Op / Call / Trace / Object</strong> 四个实体为核心（来源：tracing.mdx、call-schema-reference.mdx）：
+- <strong>Op</strong>：被 <code>@weave.op</code> 装饰的"versioned, tracked function"，代码变更时自动产生新版本（"if the code changed from the last call"）。
+- <strong>Call</strong>：Op 的一次执行记录，官方明言"Calls are similar to spans in the OpenTelemetry data model"。字段（Call schema）：<code>id</code>、<code>trace_id</code>、<code>parent_id</code>、<code>op_name</code>（可为 ref）、<code>display_name</code>、<code>inputs: Dict[str,Any]</code>、<code>output</code>、<code>exception</code>、<code>attributes</code>（用户自定义元数据）、<code>started_at</code>/<code>ended_at</code>、<code>project_id</code>、<code>wb_user_id</code>、<code>wb_run_id</code>、<code>deleted_at</code>，以及 <code>summary</code>：其中 <code>summary["usage"]</code> 存各 LLM 的原始 token 数，保留命名空间 <code>summary["weave"]</code> 含 <code>status</code>（SUCCESS/ERROR/RUNNING/DESCENDANT_ERROR）、<code>latency_ms</code>、<code>costs</code>（按模型的成本分解）、<code>trace_name</code>。
+- <strong>Trace</strong>："full trees of Calls that share the same execution context"，用 <code>trace_id</code> 取整棵调用树。
+- <strong>Thread/Turn</strong>（会话）：Thread 是共享会话上下文的 Call 分组，<code>weave.thread()</code> 上下文管理器设定/复用 <code>thread_id</code>；Turn 是线程内的高层步骤（UI 中一行），嵌套子调用不计入线程级统计。服务端有 <code>POST /threads/query</code> API（支持按 turn_count、start_time、last_updated 排序）。
+- <strong>Object 与 ref</strong>：Object 是"versioned, serializable data"，<code>weave.publish()</code> 发布后按内容寻址自动增版，ref URI 格式 <code>weave:///[ENTITY]/[PROJECT]/object/[NAME]:[VERSION]</code>，version 可为内容 digest、<code>v0/v1</code> 序号或 <code>latest</code> 别名；ref 还支持 <code>#</code> 后的 extra 路径（<code>atr/row/key/ndx</code> 等边类型）深入到表格某行某字段（dev_docs/REF_SPEC.md）。
+- <strong>Score/Feedback</strong>：scorer 结果与人工反馈都作为挂在 Call 上的 feedback 记录存储。</p>
+<h4 id="_23">核心功能清单</h4>
+<ul>
+<li><strong>Trace 视图</strong>：有。调用树 UI，含状态、延迟、token、成本；对 LLM 调用有 Chat 渲染视图。</li>
+<li><strong>会话/线程</strong>：有。Threads 列表 + 详情抽屉（turn 数、延迟、chat 面板），面向多轮对话和 Agent 会话。</li>
+<li><strong>Playground</strong>：有。支持 Bedrock/Anthropic/Azure/Deepseek/Google/Groq/Mistral/OpenAI/X.AI 九类供应商及自定义 OpenAI 兼容端点；可从某个 Call 详情页"Open chat in Playground"续跑，可编辑/重试/删除消息，支持保存模型预设。</li>
+<li><strong>Prompt 管理</strong>：有。<code>weave.StringPrompt</code> / <code>weave.MessagesPrompt</code>，<code>{variable}</code> 占位 + <code>.format()</code>，<code>weave.publish</code> 版本化并在 Prompts 页共享。</li>
+<li><strong>数据集</strong>：有。<code>weave.Dataset</code> 版本化；<code>from_calls()/from_pandas()/from_hf()</code>；UI 中可从 Traces 勾选行"Add selected rows to a dataset"，可视化增删改行。</li>
+<li><strong>实验对比</strong>：有。比较视图支持 traces/models/prompts/配置对象，Summary/Side-by-side/Unified/Calls 四种模式，diff-only 过滤、数值差可显示为整数或百分比、可设 baseline；UI 一次最多展示 6 个对象。</li>
+<li><strong>评测</strong>：有。<code>weave.Evaluation(dataset, scorers)</code>（Evaluation 是"blueprint"，每次 <code>.evaluate()</code> 是一次测量），<code>trials</code> 多次采样，<code>preprocess_model_input</code> 预处理；另有命令式 <code>EvaluationLogger</code>；还有 leaderboards。</li>
+<li><strong>标注/人工反馈</strong>：有。emoji 反应（👍👎及自定义）、≤1024 字符 note、≤1KB 自定义结构化 payload；<code>AnnotationSpec</code>（布尔/数值/分类/自由文本）+ <strong>Annotation Queues</strong> 标注队列（建队列→批量加 trace→审阅者按链接进入→进度状态跟踪→结果作为结构化元数据存回 trace，可导出为数据集）。TypeScript SDK 无 feedback 功能。</li>
+<li><strong>监控告警</strong>：有。Monitors 对生产根级 trace 自动 LLM-as-a-judge 打分（同类 signal 合并为一次推理调用），结果以带置信度的标签反馈呈现，聚合进 Monitor Scores 面板；通过 automations 可在指标跌破阈值时 Slack 通知。</li>
+<li><strong>成本核算</strong>：有。自动从 OpenAI/Anthropic/Cohere/Mistral 等响应捕获 token 并套内置价格；<code>add_cost(llm_id, prompt_token_cost, completion_token_cost, effective_date)</code> 支持自定义/追溯定价；查询时 <code>include_costs=True</code> 从 <code>call.summary["weave"]["costs"]</code> 读取。TypeScript 不支持成本跟踪。</li>
+</ul>
+<h4 id="_24">接入与实现方式</h4>
+<p>主形态是<strong>装饰器 + 自动 patch</strong>：Python <code>@weave.op()</code>（TS 用 <code>weave.op()</code> 包装）在 <code>weave.init()</code> 后自动记录输入/输出/异常/父子关系，并捕获函数代码用于版本化；<code>postprocess_inputs/postprocess_output</code> 可脱敏，<code>tracing_sample_rate</code> 支持按 op 采样（只对最外层 op 生效）。对主流 LLM 库有自动集成（integrations 目录），LLM 调用无需手工埋点。可靠性方面提供<strong>客户端 write-ahead log</strong>：<code>WEAVE_ENABLE_WAL=true</code> 后每个 API 请求先写本地 <code>.weave/wal/</code> 下的 JSONL 再发送，进程崩溃或断网后下次启动自动补发（当前 opt-in，计划默认开启）。与 OTel 的关系：Call 模型对齐 span，且服务端提供 OTLP 摄入端点 <code>POST /otel/v1/traces</code>（多租户为 <code>https://trace.wandb.ai/otel/v1/traces</code>，自托管为 <code>https://&lt;subdomain&gt;.wandb.io/traces/otel/v1/traces</code>），<strong>仅接受 protobuf</strong>（<code>application/x-protobuf</code>）；能识别 GenAI 语义约定、OpenInference、Vercel AI SDK、MLflow、Traceloop、Vertex AI 等多套属性并按优先级映射；用 <code>wandb.thread_id</code> / <code>wandb.is_turn</code> 属性接入线程模型；局限是 OTel trace 的 tool call 在 Chat 视图只能显示原始 JSON。</p>
+<h4 id="_25">自托管与后端架构</h4>
+<p>SDK 仓库 wandb/weave 为 <strong>Apache-2.0</strong>（Python≥3.10 + TypeScript SDK）。仓库内 <code>weave/trace_server</code> 含服务端参考实现：核心是 <strong>ClickHouse</strong> 后端（<code>clickhouse_trace_server_batched.py</code>、<code>clickhouse_schema.py</code>、迁移器，批量 INSERT 进 <code>calls_raw</code> 等表），另有 in-memory 实现、Redis 客户端与文件存储模块。但<strong>生产/自托管形态绑定闭源的 W&amp;B Platform</strong>：官方 self-managed 指南要求 Kubernetes ≥1.29（建议 ≥3 节点）、已部署 W&amp;B Platform、<strong>"Weave-enabled license from W&amp;B Support"</strong>（企业授权门槛）、Altinity ClickHouse Operator + ClickHouse Keeper（替代 ZooKeeper）+ 3 副本 ClickHouse 集群 + S3 兼容对象存储；通过 W&amp;B CR 中 <code>weave-trace.enabled: true</code>、<code>clickhouse.replicated: true</code> 启用 weave-trace 服务（<code>WF_CLICKHOUSE_REPLICATED_CLUSTER</code> 须与集群名一致）。UI 属于 W&amp;B 应用，闭源。SaaS 端点为 trace.wandb.ai。</p>
+<h4 id="hitl_3">人工介入与 HITL</h4>
+<p>有较完整的<strong>事后标注</strong>体系：feedback API（reaction/note/自定义 payload，<code>call.feedback.add("[LABEL]", obj)</code>）、<code>AnnotationSpec</code> 定义结构化标注字段（创建后不可改以保证一致性）、Annotation Queues 提供队列分发 + 审阅进度（Not started/In progress/Completed）+ SDK 程序化读取，结果可导出为评测/训练数据集。Guardrails 提供<strong>运行时介入</strong>：<code>result, call = op.call(x)</code> 后 <code>await call.apply_scorer(scorer)</code>，按分数阻断/改写输出（如 OpenAIModerationScorer、BedrockGuardrailScorer），且 guardrail 结果自动落库兼作 monitor。但<strong>无</strong> Agent 执行断点/单步、无状态编辑重放、无内建审批流。</p>
+<h4 id="_26">值得借鉴的点</h4>
+<ol>
+<li><strong>Call 即 span、但字段面向 LLM 一等公民</strong>：inputs/output/exception 结构化存储 + 保留命名空间 <code>summary["weave"]</code>（status/latency_ms/costs/usage）。Go Agent 平台可直接抄这个 schema：比裸 OTel span attributes 好查询，又保留 OTel 兼容（可做双向映射）。</li>
+<li><strong>内容寻址 ref URI（<code>weave:///entity/project/object/name:digest#row/...</code>）</strong>：把数据集、prompt、评测配置全部版本化并可引用到"某版本数据集的第 10 行的 input 字段"。这让评测结果可精确复现、trace 与数据集行可互相链接，是"测试平台"区别于纯 APM 的关键设施。</li>
+<li><strong>Thread/Turn 两级会话模型</strong>：只把高层 turn 计入会话统计、嵌套调用下钻查看，且允许通过 OTel 属性（<code>wandb.thread_id</code>/<code>wandb.is_turn</code>）声明。多轮 Agent 会话的指标聚合按 turn 而非 span 才有意义，实现成本低（calls 表加两列 + 一个 context manager）。</li>
+<li><strong>guardrail 与 monitor 共用 scorer 抽象</strong>：同一个 Scorer 既可离线评测（Evaluation）、也可在线抽样监控（monitor）、还可同步拦截（apply_scorer），且拦截结果自动落库"免费"变成监控数据。一套打分接口三处复用，避免平台内三套评分体系。</li>
+<li><strong>客户端 WAL（先写本地 JSONL 再上报）</strong>：解决进程崩溃丢 trace 和断网缓冲，Go 里用 append-only 文件即可实现，对"测试平台"抓取短生命周期 Agent 进程的数据尤其重要。</li>
+<li><strong>从生产 trace 一键建数据集 + 标注队列回流</strong>：Traces 页勾选→入数据集→标注队列人审→导出评测集，形成 debug→dataset→eval 飞轮；平台侧只需要"call 行到 dataset 行"的引用关系即可支撑。</li>
+</ol>
+<blockquote>
+<p><strong>⚠️ 核验修正</strong>（独立核查代理逐条反驳后订正）：</p>
+<ul>
+<li><strong>订正</strong>：原稿关键事实「Guardrails 与 Monitors 共用 Scorer：op.call() 返回 (result, call) 后 await call.apply_scorer(scorer) 同步拦截，结果自动落库兼作监控；Monitors 用 LLM-as-a-judge 只对成功的根级 trace 打分且同类 signal 批量合并推理」经核查有误。前半正确：guardrails.mdx 证实 result, call = op.call(...) → await call.apply_scorer(scorer)，且 "every scorer result from guardrails is automatically stored in Weave's database, so your guardrails also function as monitors"。但"只对成功的根级 trace 打分"不准确：monitors.mdx 原文为 "Quality signals evaluate successful root-level traces. Error signals evaluate failed traces. Weave doesn't score child spans and intermediate Calls." —— 即仅 Quality 类 signal 限于成功的根级 trace，Error 类 signal 专门给失败的 trace 分类打分。同组 signal 合并为单次 LLM 调用属实。另注意该页已标注为旧方案，新实现推荐 Weave for Agents 的 Signals。来源: https://raw.githubusercontent.com/wandb/docs/main/weave/guides/evaluation/monitors.mdx</li>
+</ul>
+</blockquote>
+<h3 id="25-braintrust">2.5 Braintrust</h3>
+<p><strong>类别</strong>：评测工具/eval-first AI 观测平台（评测+tracing+代理网关一体）</p>
+<blockquote>
+<p>调研说明：本环境网络策略拦截了 braintrust.dev 的直接访问（HTTP 403），官方 docs/blog 内容通过搜索引擎对官方页面的摘要获取（URL 均为官方页面）；GitHub 上的 README/LICENSE/Terraform 源码（autoevals、braintrust-proxy、terraform-aws-braintrust-data-plane、helm、braintrust-sdk-go）为直接打开原文，可信度最高。无法确认处已标「未核实」。</p>
+</blockquote>
+<h4 id="_27">定位与设计理念</h4>
+<p>Braintrust 自我定位是「构建高质量 AI 产品的 AI 可观测平台」，但其根是 eval-first：一切围绕 <code>Eval(name, {data, task, scores})</code> 三要素展开——data 是测试用例集（input/expected），task 是被评函数（一次 LLM 调用、多步 agent、检索流水线皆可），scores 是打分器列表。实验（experiment）是「不可变、可比较的 eval 运行记录」，可从代码或 UI 发起并接入 CI/CD 拦截回归。核心取舍有三：(1) logs 与 experiments 共用同一数据结构，生产观测与离线评测是同一份数据的两个视角；(2) 为大规模 trace 检索自研存储引擎 Brainstore，而非复用通用数仓；(3) 用 hybrid 部署（数据面进客户 VPC、控制面托管）换取企业信任。一句话哲学：<strong>评测不是测试阶段的附属品，而是数据模型本身——生产日志天然就是下一轮评测的数据集。</strong></p>
+<h4 id="_28">数据模型</h4>
+<ul>
+<li>顶层实体是 <strong>project</strong>，其下挂 experiments、logs、datasets、prompts/functions、playgrounds。</li>
+<li>最小单元是 <strong>span</strong>，字段极简且全部可选：<code>input</code>、<code>output</code>、<code>expected</code>、<code>metadata</code>、<code>scores</code>、<code>metrics</code>。其中 <code>scores</code> 必须是 string→[0,1] 数字的映射；<code>metrics</code> 存 token、延迟等数值。</li>
+<li><code>span_attributes</code> 目前识别两个属性：<code>name</code>（UI 显示名）和 <code>type</code>，type 枚举为 <code>llm / score / function / eval / task / tool / review</code>（决定图标）。</li>
+<li>系统字段 <code>span_id</code>、<code>root_span_id</code>、<code>span_parents</code> 构成 span 树（一个 trace = 根 span + 子孙）；<code>project_id / experiment_id / dataset_id / log_id</code> 由 SDK 自动填充，决定该 span 归属于实验还是生产日志——<strong>同一 schema，靠归属字段区分 experiment 与 log</strong>，因此埋点代码一次编写两处生效，分数与人工反馈对两者通用，生产数据可无缝转评测集。</li>
+<li><strong>dataset</strong> 记录为 input/expected/metadata 三元组，每次 insert/update/delete 都被版本化，评测可 pin 到特定版本，版本可像 prompt 一样在 dev/staging/prod 环境间晋级。</li>
+<li>打分产物是 <strong>Score</strong> 对象：<code>{name, score∈[0,1]|null, metadata(如 rationale)}</code>（autoevals 公开接口）。</li>
+<li>会话/线程（session/thread）级专门实体：在本次打开的来源中未见，未核实（Go SDK 支持 W3C baggage 分布式追踪跨服务串 trace）。</li>
+</ul>
+<h4 id="_29">核心功能清单</h4>
+<ul>
+<li><strong>trace 视图</strong>：有。Logs 页为可搜索/过滤的 trace 表（每行=一个 trace 的根 span），点开看 span 树；支持 BTQL 查询语言过滤；另有 CLI <code>bt view logs</code>。</li>
+<li><strong>会话/线程</strong>：未核实（未见独立 thread 视图实体，见上）。</li>
+<li><strong>playground</strong>：有。在浏览器里把 prompt 改动对真实数据集实时跑评测、并排比输出，是 PM 与工程师共用的迭代界面。</li>
+<li><strong>prompt 管理</strong>：有。prompt 作为 function 存储并版本化，支持环境（environments）与分阶段发布，SDK 可拉取 hosted prompt。</li>
+<li><strong>数据集</strong>：有。全量版本化 + 可 pin 版本 + 环境绑定。</li>
+<li><strong>实验对比</strong>：有。experiments 间 diff 对比、随时间跟踪，官方 GitHub Action（eval-action）做 CI 门禁。</li>
+<li><strong>评测</strong>：有（核心）。离线 Eval 三要素 + 在线评测（online scoring：对生产 trace 按采样率异步跑 scorer，官方建议高流量 1–10%、关键低流量 50–100%）。</li>
+<li><strong>标注/人工反馈</strong>：有。见 HITL 节。</li>
+<li><strong>监控告警</strong>：有。Monitor 页仪表盘聚合请求量、延迟、token、成本、分数等，视图可保存；Automations 支持用 BTQL 写告警条件（如「1 小时内 relevancy&lt;0.5 的响应超 5% 则告警」），触发 webhook/Slack。</li>
+<li><strong>成本核算</strong>：有。token 用量与成本是 Monitor 页一等指标，可按维度分组对比。</li>
+</ul>
+<h4 id="_30">接入与实现方式</h4>
+<ul>
+<li>SDK 矩阵：TypeScript/Python 是主力（tracing+evals），2025–2026 新增 Go、Java、Ruby、.NET、Rust（beta），由 braintrust-spec 统一生成规范。</li>
+<li><strong>Go SDK（对本项目最相关）完全构建在 OpenTelemetry 之上</strong>：不自造 tracer，用户创建标准 <code>sdk/trace.TracerProvider</code>，<code>braintrust.New(tp, braintrust.WithProject(...))</code> 只是注册一个 exporter。每个集成是独立 Go module（<code>trace/contrib/openai、anthropic、genai、genkit、adk、cloudwego/eino、langchaingo、sashabaranov/go-openai</code>），并支持用 DataDog <strong>Orchestrion 在编译期自动注入埋点</strong>（<code>orchestrion go build</code>，零代码改动）；也可手动加中间件。License：Apache-2.0。</li>
+<li>评测入口约定：JS 写 <code>*.eval.ts</code> 文件 + <code>npx braintrust run</code>；Python 写 <code>eval_*.py</code>；Go 用 <code>evaluator.Run(ctx, eval.Opts{Experiment, Dataset, Task, Scorers})</code> 泛型 API。</li>
+<li><strong>OTel 原生接入</strong>：任何 OTLP exporter 指向 <code>https://api.braintrust.dev/otel</code>（EU：api-eu；自托管：自己的 API URL），header 带 <code>Authorization: Bearer &lt;key&gt;</code> 和 <code>x-bt-parent=project_id:&lt;id&gt;</code>——<strong>用 header 决定 trace 归属的 project/experiment</strong>。</li>
+<li><strong>AI proxy/gateway</strong>：OpenAI 兼容 API（base_url 改为 <code>https://api.braintrust.dev/v1/proxy</code>）统一访问 OpenAI/Anthropic/Llama/Mistral 等；请求带 <code>seed</code> 参数即激活结果缓存（降本、评测可复现）；可自部署到 Vercel/Cloudflare Workers/AWS Lambda/Express。autoevals 默认也走这个 gateway 跑 LLM-judge。</li>
+</ul>
+<h4 id="_31">自托管与后端架构</h4>
+<ul>
+<li><strong>Hybrid 模型</strong>：控制面（UI、认证、元数据同步）由 Braintrust 托管；数据面（API、Postgres、Redis、S3、Brainstore）部署在客户自己的云。浏览器经 CORS <strong>直连客户数据面</strong>取数，敏感数据（logs/traces/spans/experiments/datasets/completions）不经过 Braintrust 服务器，数据面只回传 metrics/状态遥测。</li>
+<li><strong>AWS 数据面组件</strong>（直接读 terraform-aws-braintrust-data-plane/main.tf 确认）：KMS；main VPC + quarantine VPC（<strong>用户自定义函数/UDF 打分器在隔离 VPC 的 Lambda 里跑</strong>，安全沙箱设计）；RDS Postgres；ElastiCache Redis；S3（Brainstore 数据桶 + Lambda responses 桶）；Lambda 服务（APIHandler、AIProxy）；ECS 服务（api-ecs、gateway-ecs 即 AI gateway）；CloudFront 作 ingress；Brainstore 跑在 EC2 上且支持 <strong>writer / fast-reader 节点分离</strong>。GCP/Azure 走 Terraform 模块 + 官方 Helm chart（OCI: public.ecr.aws/braintrust/helm/braintrust）部署到 K8s。</li>
+<li><strong>Brainstore</strong>：Rust 写的自研引擎，三个设计原则：全部数据放对象存储（无本地盘核心状态）、按客户分区、倒排索引（基于 Tantivy）+ 列存双结构；WAL 保证写后立即可见与强一致；官方宣称热查 &lt;50ms、冷查 &lt;500ms（来自官方博客，经搜索摘要，具体数字未直接核实）。<strong>Brainstore 闭源且需 license key</strong>（在 UI Settings &gt; Data Plane 获取，Terraform 部署必填）。</li>
+<li>开源协议：autoevals=MIT，braintrust-proxy=MIT 风格宽松许可，Go SDK=Apache-2.0，Terraform/Helm 模块开源；<strong>平台本体（API server、Brainstore、UI）闭源商业</strong>。</li>
+</ul>
+<h4 id="hitl_4">人工介入与 HITL</h4>
+<ul>
+<li><strong>人工评审（human review）</strong>：有。项目级配置 score types（含 categorical 分类型分数，选项映射 0–100%），人工分数写回同一 scores 字段，对 logs 和 experiments 通用；可把 trace 指派给评审人并经 Slack/webhook 通知，用队列组织评审工作（官方文章描述了 triage 队列「忽略/需评审/重复」+ SME 队列补 expected 真值的模式；「kanban 队列」表述来自官方 article，细节未核实）。</li>
+<li><strong>agent 运行时断点/状态编辑/审批流</strong>：无。Braintrust 不介入应用运行时，HITL 全部发生在数据/标注层而非执行层。</li>
+</ul>
+<h4 id="_32">值得借鉴的点</h4>
+<ol>
+<li><strong>六字段统一 span schema + 归属字段区分实验与日志</strong>：<code>input/output/expected/scores/metrics/metadata</code> 全可选，<code>experiment_id</code> vs <code>log_id</code> 决定视角。对 trpc-agent-go 平台意味着一套埋点、一张表同时支撑「跑测试」和「看生产」，生产 trace 一键回流为回归数据集——这是 Braintrust 最值钱的架构决策，实现成本却很低。</li>
+<li><strong>OTel-first、exporter-only 的 SDK 形态</strong>：Braintrust Go SDK 不自造 tracer，只注册 exporter，并用 <code>x-bt-parent</code> header 做归属路由。trpc-agent-go 已有 OTel telemetry，平台侧只需实现一个 OTLP 接收端 + header 路由，即可零锁定接入任何 OTel 用户；Orchestrion 编译期注入也值得评估（Go 无运行时 monkey-patch，这是 Go 生态做「零代码埋点」的现实路径）。</li>
+<li><strong>Eval 三要素 + 统一 Scorer 签名独立开源</strong>：scorer 统一为 <code>(input, output, expected) → {score∈[0,1], metadata.rationale}</code>，归一化到 [0,1] 使任何打分方法可互换可对比。可以直接做一个 Go 版 autoevals（Levenshtein/ExactMatch/JSONDiff/LLMClassifier），既是产品护城河也是获客入口（autoevals 964 星远超其 SDK）。</li>
+<li><strong>online scoring = 同一 scorer 定义 + 采样率异步跑在生产 trace 上</strong>：离线在线共用打分器，只加一个 sampling rate 配置，低成本把评测延伸到生产监控。</li>
+<li><strong>LLM 代理内建显式缓存</strong>（<code>seed</code> 参数激活）：评测场景大量重复请求，缓存直接省钱且保证可复现；OpenAI 兼容 API 是最小接入成本方案。</li>
+<li><strong>控制面/数据面分离 + 浏览器 CORS 直连数据面</strong>：敏感 trace 不出客户 VPC、UDF 打分器放隔离 VPC 沙箱执行——对私有化/合规要求高的企业客户（国内场景尤甚）是决定性卖点，架构上从第一天就值得预留这条边界。</li>
+</ol>
+<blockquote>
+<p><strong>⚠️ 核验修正</strong>（独立核查代理逐条反驳后订正）：</p>
+<ul>
+<li><strong>订正</strong>：原稿关键事实「Eval 三要素为 data/task/scores；JS 评测文件约定 <em>.eval.ts 且用 npx braintrust run 执行，Python 为 eval_</em>.py」经核查有误。部分有误。data/task/scores 三要素、<em>.eval.[ts|tsx|js|jsx] 命名、eval_</em>.py 命名均被 autoevals README 证实，且 JS SDK CLI 源码 INCLUDE_EVAL=["*<em>/</em>.eval.ts",...] 佐证。但执行命令有误：README 中的 <code>npx braintrust run</code> 已过时——当前 JS SDK CLI（braintrust-sdk-javascript/js/src/cli/index.ts）只定义 eval/push/pull 三个子命令，没有 run；官方命令为 <code>npx braintrust eval</code>（及新 CLI <code>bt eval</code>）。来源: https://raw.githubusercontent.com/braintrustdata/braintrust-sdk-javascript/main/js/src/cli/index.ts 、https://www.braintrust.dev/docs/reference/cli/quickstart</li>
+<li><strong>订正</strong>：原稿关键事实「AI proxy 以 OpenAI 兼容 API 暴露于 https://api.braintrust.dev/v1/proxy，请求带 seed 参数才激活缓存；可自部署到 Vercel/Cloudflare/AWS Lambda/Express；MIT 风格许可」经核查有误。缓存条件表述过强，其余正确。URL、四个自部署目标（Vercel/Cloudflare/AWS Lambda/Express）、MIT 许可（LICENSE 文件为标准 MIT）均证实。但官方文档写明缓存有三种模式：默认 auto 模式下 temperature=0 <strong>或</strong> 设置 seed 均会缓存，并可用 x-bt-use-cache: always/never 强制开关——并非"只有带 seed 才激活"（README 的 "A seed activates the proxy's cache" 只是简化示例）。另注：官方 docs 已将该 proxy 页标注为 deprecated。来源: https://www.braintrust.dev/docs/deploy/ai-proxy</li>
+</ul>
+</blockquote>
+<h3 id="26-opik-comet">2.6 Opik (Comet)</h3>
+<p><strong>类别</strong>：tracing平台 / LLM 可观测 + 评测一体化平台</p>
+<h4 id="_33">定位与设计理念</h4>
+<p>Opik 是 Comet 出品的开源 LLM 工程平台，定位是覆盖 LLM 应用「评估、测试、监控、优化」全生命周期：开发期用 tracing 调试、评测期用 datasets/experiments 回归、生产期用在线评估规则和 guardrails 兜底，最后用 agent optimizer 自动改进提示词。核心取舍是「全开源（Apache-2.0）+ 重后端」：不像很多竞品把开源版做成阉割版，Opik 自托管版包含全部功能（仅缺用户管理），代价是后端组件较重（Java 后端 + ClickHouse + MySQL + Redis + Zookeeper + MinIO）。一句话哲学：<strong>观测数据（trace）是评测和优化的原料，三者必须在同一平台闭环</strong>——experiment item 直接挂 trace、在线规则直接给生产 trace 打分、optimizer 直接消费已记录的 dataset 和 metric。README 宣称支持日均 4000 万+ trace 的规模。</p>
+<h4 id="_34">数据模型</h4>
+<p>层级为 <strong>Project → Thread → Trace → Span（可嵌套）</strong>：
+- <strong>Trace</strong>：一次与 LLM/agent 的完整交互，字段含唯一 ID、input、output、起止时间、metadata（模型、temperature 等）、tags、feedback scores、聚合成本。
+- <strong>Span</strong>：trace 内的单个操作（函数调用、API 请求、数据处理步骤），有 parent-child 层级、start/end 时间、类型（LLM 调用、tool/函数调用、数据处理、外部 API、自定义），LLM span 上带 provider/model/token usage，用于自动算成本（USD，逐 span 计价、trace 聚合、项目 dashboard 汇总）。
+- <strong>Thread</strong>：用用户自定义的 <code>thread_id</code>（项目内唯一）把多条 trace 聚成一次多轮会话，是会话级评测（Conversational Coherence、User Frustration 等）的作用对象。
+- <strong>Feedback Score</strong>：可打在 trace 或 thread 上，来源可以是 SDK、UI 人工标注、在线评估规则；同一 item 支持多人打分并做分歧分析。
+- <strong>Dataset / Dataset Item</strong>：item 含 input、expected output 及元数据。<strong>Experiment / Experiment Item</strong>：一次评测运行；每个 experiment item 存 input、期望输出、实际输出、feedback scores，并<strong>关联一条 trace</strong> 以便下钻定位失分原因；实验层再算聚合指标供横向对比。
+- <strong>Prompt</strong>：库内提示词按 commit ID 自动版本化，可打 tag（如 production），可与 experiment 关联。</p>
+<h4 id="_35">核心功能清单</h4>
+<ul>
+<li><strong>Trace 视图</strong>：有。嵌套 span 树、输入输出、多模态、agent graph 可视化（log_agent_graph）、分布式追踪。</li>
+<li><strong>会话/线程</strong>：有。thread_id 聚合多轮对话，可整线程评测与标注。</li>
+<li><strong>Playground</strong>：有。多提供商（OpenAI/Anthropic/Bedrock/Vertex/Azure/OpenRouter 等）、<code>{{variable}}</code> 模板对接 dataset 批量跑、支持图像多模态，运行自动记录到专用 <code>playground</code> 项目。</li>
+<li><strong>Prompt 管理</strong>：有。中心化 prompt 库、commit 版本化、版本 tag、SDK <code>Prompt/ChatPrompt</code> 类按名取用（<code>client.get_prompt()</code>）、OQL 检索、与实验联动。</li>
+<li><strong>数据集</strong>：有。手工/合成/生产 trace 导出三种来源，支持 CSV、API 导入。</li>
+<li><strong>实验对比</strong>：有。多 experiment 聚合指标对比 + item 级下钻到 trace。</li>
+<li><strong>评测</strong>：有，是强项。20+ 启发式指标（Levenshtein、ROUGE、BLEU、IsJson、RegexMatch 等）+ 近 20 个 LLM-as-a-judge 指标（Hallucination、Moderation、AnswerRelevance、ContextPrecision/Recall、<strong>G-Eval</strong>、LLM Juries、Trajectory Accuracy、Agent Tool Correctness 等）+ 会话级指标；judge 默认用 OpenAI GPT-5-nano，可经 LiteLLM（Python）/Vercel AI SDK（TS）换模型。另有在线评估规则：对生产 trace 按可调采样率（0-100%）自动跑 judge/Python 代码指标，thread 规则默认 15 分钟冷却等会话完结。</li>
+<li><strong>标注/人工反馈</strong>：有。Annotation Queues——把 trace/thread 批量入队，定义评分维度，生成链接分享给 SME 在极简界面里逐条打分+评论。</li>
+<li><strong>监控告警</strong>：监控 dashboard 有（feedback 分数、trace 量、token 用量随时间变化）；文档目录含 alerts.mdx，告警功能存在但细节未核实。</li>
+<li><strong>成本核算</strong>：有。基于 provider+model+token usage 自动估算 USD 成本，9 个集成自动采集，价格表为仓库内 JSON，支持自定义价格。</li>
+</ul>
+<h4 id="_36">接入与实现方式</h4>
+<p>Python SDK 为主（README 显示代码占比 Python 55%、TypeScript 43%）。四种埋点方式：1) <strong><code>@track</code> 装饰器</strong>——被装饰函数自动创建 span，嵌套调用自动生成父子 span，记录入参与返回值；2) <strong>框架集成回调</strong>：60+ 集成（OpenAI、LangChain、LangGraph、LlamaIndex、CrewAI、Google ADK、Bedrock 等），其中 9 个自动采集 token/成本；3) <strong>低层 client</strong> 手工建 trace/span；4) <strong>OpenTelemetry OTLP 端点</strong>：后端直接暴露 <code>/api/v1/private/otel</code>（自托管为 <code>http://localhost:5173/api/v1/private/otel</code>），<strong>仅支持 HTTP 传输，gRPC exporter 明确会报错</strong>，认证/路由靠 <code>OTEL_EXPORTER_OTLP_HEADERS</code> 里的 Authorization、projectName、Comet-Workspace 头。分布式追踪用类似 OTel 的上下文传播机制（跨服务传 headers）。SDK 侧还有 offline fallback（离线缓冲）能力。</p>
+<h4 id="_37">自托管与后端架构</h4>
+<p>Apache-2.0，全功能开源（自托管唯一缺失是用户管理）。docker-compose 组件清单（已核实源文件）：<strong>opik-backend（Java 主后端，Dropwizard 系）</strong>、<strong>opik-python-backend</strong>（执行用户 Python 评测代码 + optimizer studio + RQ worker）、<strong>opik-frontend</strong>（Nginx + Web UI，5173 端口）、<strong>MySQL 8.4</strong>（状态库：项目、prompt、规则等元数据）、<strong>ClickHouse 25.8</strong>（分析库：trace/span 大数据量存储与聚合，配 <strong>Zookeeper 3.9</strong> 协调）、<strong>Redis 7.2</strong>（缓存/队列，含 RQ）、<strong>MinIO</strong>（S3 对象存储，附件/大 payload），可选 <strong>opik-guardrails-backend</strong>（独立安全校验服务，<code>./opik.sh --guardrails</code> 启动，有 GPU 自动用 GPU，目前仅自托管可用），另带可选 Jaeger + OTel Collector 做平台自身观测。部署形态：本地 <code>opik.sh</code>/<code>opik.ps1</code> 一键 Docker（实验用），生产走 Kubernetes/Helm；文档强调 server 与 <code>opik</code>/<code>opik-optimizer</code> SDK 版本需对齐。Agent Optimizer 是独立 SDK（opik-optimizer），提供 MetaPrompt、HRPO、Few-shot Bayesian、Evolutionary（遗传算法）、GEPA（外部包封装）、Parameter（调 temperature/top_p）等优化器，消费平台内 dataset+metric，结果回平台对比。</p>
+<h4 id="hitl_5">人工介入与 HITL</h4>
+<ul>
+<li><strong>标注队列</strong>：有（见上），是 Opik HITL 的核心形态——异步、离线、面向 SME 的批量评审，而非运行时介入。</li>
+<li><strong>UI 人工打分</strong>：有，trace/thread 详情页可直接 annotate（annotate_traces.mdx）。</li>
+<li><strong>运行时断点/暂停 agent/状态编辑</strong>：无。Opik 是旁路观测平台，不在 agent 执行路径上（guardrails 例外：其校验调用是阻塞式的，可拦截不合规响应，但那是自动规则，非人工审批）。</li>
+<li><strong>审批流</strong>：无。未见 human approval / 断点续跑类机制。</li>
+</ul>
+<h4 id="_38">值得借鉴的点</h4>
+<ol>
+<li><strong>Experiment Item 强制挂 trace</strong>：每条评测结果都关联一条完整 trace，失分可直接下钻到具体 span。对 Go Agent 测试平台，这意味着评测 runner 应复用同一套 tracing 管道（跑测试时也产生 trace），而不是另存一份「测试日志」——一张表加 trace_id 外键即可实现，收益是调试成本骤降。</li>
+<li><strong>MySQL(元数据) + ClickHouse(trace 明细) 双库分离</strong>：trace/span 是高写入、重聚合的时序型数据，与项目/prompt/规则等低频元数据分开存。Go 平台若预期规模不小，从第一天就把 span 写入走列存（ClickHouse），避免日后从 PG 迁移。</li>
+<li><strong>OTLP HTTP ingestion 端点作为"万能接入口"</strong>：自研 SDK 覆盖不了所有框架，直接在后端暴露 <code>/v1/traces</code> OTLP HTTP 接收器，把 OTel GenAI 语义的 span 映射进自家模型，就能白嫖整个 OTel instrumentation 生态——对 Go 生态尤其划算（Go 项目普遍已有 OTel）。注意 Opik 只做了 HTTP 未做 gRPC，Go 平台可两者都支持形成差异化。</li>
+<li><strong>在线评估规则 = 「LLM judge + 采样率 + thread 冷却期」三件套</strong>：对生产流量按百分比采样跑 judge，thread 级规则等 15 分钟会话静默后再评，避免评到半截对话。这套参数化设计成本低、直接可抄。</li>
+<li><strong>Annotation Queue 的 SME 分发模式</strong>：把「工程师视角的 trace 视图」和「非技术标注员的极简打分界面」拆成两个 UI，用分享链接+预定义评分维度降低人工评测组织成本，多人打分再做分歧分析。这是低成本高质量人工反馈的成熟范式。</li>
+<li><strong>thread_id 由调用方自定义</strong>：会话聚合不靠平台生成 ID，而是让业务传自己的会话 ID（项目内唯一），零迁移成本地兼容任何既有会话体系——Go SDK 设计 session 概念时照抄即可。</li>
+</ol>
+<blockquote>
+<p><strong>⚠️ 核验修正</strong>（独立核查代理逐条反驳后订正）：</p>
+<ul>
+<li><strong>未核实</strong>：「支持 60+ 框架集成」——核查代理无法访问来源亦检索不到佐证，采信需谨慎。</li>
+</ul>
+</blockquote>
+<h3 id="27-helicone-promptlayer">2.7 Helicone + PromptLayer</h3>
+<p><strong>类别</strong>：代理网关式观测（Helicone）+ Prompt管理/CMS与评测（PromptLayer）</p>
+<h4 id="_39">定位与设计理念</h4>
+<p><strong>Helicone</strong>：开源（Apache-2.0，YC W23）的 "AI Gateway + LLM 可观测平台"，卖点是 "one line of code"——把客户端 baseURL 改成 <code>https://ai-gateway.helicone.ai</code> 即完成接入，日志、成本、延迟、缓存、限流全部在网关层随流量获得。核心取舍：<strong>用网络层的一跳换取零代码侵入</strong>——不需要 SDK、不挑语言，但可见性天然止步于"LLM 请求边界"，应用内部的非 LLM 步骤需要靠 header 约定补充。一句话哲学：观测不该是埋点工程，而是流量的副产品。</p>
+<p><strong>PromptLayer</strong>：闭源 SaaS（仅 SDK 开源），定位是 "prompt 工程平台"——Prompt Registry（prompt CMS）是第一公民，版本、release label、评测、请求日志都围绕"让 prompt 像代码一样可版本化、又让非工程师能改"展开。一句话哲学：prompt 是需要独立发布周期的生产资产，不该被硬编码在代码里。</p>
+<h4 id="_40">数据模型</h4>
+<p><strong>Helicone</strong> 以单条 <strong>request</strong> 为原子实体，其上叠加：
+- <strong>Custom Property</strong>：<code>Helicone-Property-[Name]</code> header 传入的扁平 KV（如 <code>Helicone-Property-Environment: production</code>），用于过滤、成本分段、告警；<code>Helicone-User-Id</code> 是特化 property，驱动 per-user 成本/指标。
+- <strong>Session</strong>：三个 header 构成——<code>Helicone-Session-Id</code>（UUID，组 ID）、<code>Helicone-Session-Path</code>（斜杠路径如 <code>/abstract/outline/lesson-1</code>，<strong>用路径字符串而非 span 父子指针表达层级</strong>；文档强调"相同 path 代表同类工作，而非时间顺序"）、<code>Helicone-Session-Name</code>（人类可读名）。LLM 调用、向量库查询、工具执行都可挂进同一 session 树。
+- <strong>Score</strong>：<code>POST /v1/request/{requestId}/score</code>，requestId 来自响应头 <code>helicone-id</code>；<strong>只接受整数和布尔</strong>（0.92 需转成 92），默认延迟 10 分钟聚合。</p>
+<p><strong>PromptLayer</strong> 的实体更丰富：
+- <strong>Request log</strong>：provider/model/input/output/tokens/price/tags/metadata，且可关联 <code>prompt_name + prompt_version_number</code>，把线上流量回链到 prompt 版本。
+- <strong>Trace/Span</strong>：<code>POST /spans-bulk</code> 接受的 span 结构就是 OTel 形态（<code>trace_id</code>/<code>span_id</code>/<code>parent_id</code>/<code>SpanKind</code>/<code>attributes</code>/<code>events</code>），并允许在 span 上挂 <code>log_request</code> 载荷；SDK 侧用 <code>@pl_client.traceable</code> 装饰器建父子 span。
+- <strong>Prompt Template</strong>：带版本号、<code>commit_message</code>、<code>release_labels</code>（如 prod/staging）、metadata（可存 model provider/name/parameters，即模型配置随 prompt 版本走）。
+- <strong>Dataset</strong>：可版本化，且能从请求历史按过滤条件生成（<code>create_dataset_version_from_filter_params</code>）。
+- <strong>Eval Report</strong>：评测流水线产出多列打分（每列 boolean/数值），汇总 <code>overall_score</code>。
+- <strong>Score</strong>：<code>POST /rest/track-score</code>，0–100 整数，可命名多个 score。</p>
+<h4 id="_41">核心功能清单</h4>
+<ul>
+<li><strong>Trace 视图</strong>：Helicone 有（Sessions 树视图，含 agent 全流程）；PromptLayer 有（traces + spans）。</li>
+<li><strong>会话/线程</strong>：Helicone 有（Sessions，header 驱动）；PromptLayer 无独立会话实体，靠 trace/metadata/tags 组织。</li>
+<li><strong>Playground</strong>：PromptLayer 有（官网宣传 prompt 编辑与测试环境，细节未逐页核实）；Helicone 有 prompt/experiments 相关 UI（docs 存在 prompts.mdx、experiments.mdx，细节未核实）。</li>
+<li><strong>Prompt 管理</strong>：Helicone 有（prompt versioning，docs 含 prompts 与 prompts-legacy 目录）；PromptLayer 是核心功能（registry + release label + 零停机发布）。</li>
+<li><strong>数据集</strong>：两者都有（Helicone datasets.mdx；PromptLayer 动态数据集+从日志生成）。</li>
+<li><strong>实验对比</strong>：Helicone 有 experiments；PromptLayer 有批量评测 + A/B（release label 按流量分配，细节未核实）。</li>
+<li><strong>评测</strong>：Helicone 偏"score 汇聚器"（接 RAGAS/自定义框架的结果）+ docs 有 evaluation 目录；PromptLayer 有内建 eval pipeline（含 LLM Assertion 等 eval 类型、CI 触发、<code>POST /reports/{id}/run</code>）。</li>
+<li><strong>标注/人工反馈</strong>：Helicone 有 feedback（用户级好评/差评，feedback.mdx）+ scores API；PromptLayer 有人工打分（track.score），专门的标注队列未核实。</li>
+<li><strong>监控告警</strong>：Helicone 有（alerts.mdx + webhooks.mdx，可按 property 触发）；PromptLayer 未见独立告警功能（未核实）。</li>
+<li><strong>成本核算</strong>：Helicone 核心强项（成本按 user/property/feature 分段，"计算每用户每对话成本"）；PromptLayer 有（span/log 带 price 字段），但非主打。</li>
+</ul>
+<h4 id="_42">接入与实现方式</h4>
+<p>这是两者最值得对比的地方——<strong>代理式 vs SDK 式</strong>：
+- <strong>Helicone 代理模式</strong>：改 baseURL，所有配置都通过 <strong>HTTP header 即 API</strong>（<code>Helicone-Property-*</code>、<code>Helicone-Session-*</code>、<code>Helicone-Cache-Enabled</code>、<code>Cache-Control: max-age=...</code>、<code>Helicone-Cache-Bucket-Max-Size</code>、<code>Helicone-Cache-Seed</code>）。代理在转发前完成日志、token/成本计算、缓存、限流、重试。
+- <strong>Helicone 异步日志模式</strong>（<code>@helicone/async</code> 包）：不经代理、无额外延迟/单点风险，但官方明确<strong>失去 cache、rate limits、retries 等主动能力</strong>——这就是代理式埋点的取舍清单。
+- <strong>PromptLayer SDK 模式</strong>：包装 provider client（<code>openai = pl.openai</code>），请求照常直连 provider，SDK 旁路上报；<code>return_pl_id=True</code> 拿回 request_id 供后续打分；另有 REST <code>log_request</code> 手动上报、<code>@traceable</code> 装饰器做函数级 trace、<code>pl.run(prompt_name=..., prompt_release_label="prod")</code> 把"取模板+执行+记日志"合一。
+- <strong>与 OTel 关系</strong>：Helicone 不走 OTel，自有 header 协议；PromptLayer 的 <code>/spans-bulk</code> span schema 就是 OTel 数据形态（trace_id/span_id/SpanKind/attributes），事实上兼容 OTel 心智模型，但未见标准 OTLP endpoint（未核实）。</p>
+<h4 id="_43">自托管与后端架构</h4>
+<p><strong>Helicone</strong>（Apache-2.0，monorepo）：README 列出的组件为 <strong>Web（Next.js 前端）、Worker（Cloudflare Workers 代理）、Jawn（Express + Tsoa 的日志收集后端）、Supabase（应用库+认证）、ClickHouse（分析库）、Minio（对象存储）</strong>。手动自托管文档要求：ClickHouse（时序/分析）、Minio（S3 兼容）、Postgres 17.4、mailhog、<strong>Jawn（"Backend + Main Proxy"）</strong>、Web。部署形态：docker-compose（推荐）、Helm（生产/企业）；官方博客称自托管栈从 12 个容器精简到 4 个。<strong>Kafka：当前 README 与自托管文档均未提及，"云端曾用 Kafka" 未核实</strong>。云端缓存存于 Cloudflare Workers KV（300+ 边缘节点）。
+<strong>PromptLayer</strong>：平台闭源 SaaS，只有 SDK（prompt-layer-library / prompt-layer-js）开源；自托管/私有化部署选项未核实。</p>
+<h4 id="hitl_6">人工介入与 HITL</h4>
+<p>两者都<strong>没有</strong> agent 断点续跑、状态编辑、审批流之类的运行时 HITL。人工介入形态：Helicone 是事后打分（scores API）+ 终端用户 feedback；PromptLayer 的 HITL 藏在 <strong>prompt 发布流程</strong>里——非工程师在 registry 改 prompt、用临时 release label 灰度、手动把 label 晋升到 prod（zero-downtime release 文档演示了 <code>new-var</code> 临时标签流程），这本质上是一个人工审批点。标注队列：两者均未核实到该功能。</p>
+<h4 id="_44">值得借鉴的点</h4>
+<ol>
+<li><strong>"header/metadata 即协议"的扁平 KV 埋点面</strong>：Helicone 用 <code>Helicone-Property-*</code> 一招同时喂过滤、成本分段、告警、导出。Go 平台可在 context/metadata 里定义同样一套扁平 KV，proxy 与 SDK 两种接入共用同一协议，后端只需一张 properties 宽列。</li>
+<li><strong>Session-Path 路径字符串代替 span 树</strong>：<code>/task/research/web_search</code> 这种路径既能渲染层级，又天然支持"同 path = 同类工作"的跨 session 聚合（比 parent_span_id 更易做 GROUP BY），对 agent 工作流的步骤级成本/延迟统计非常实用，且用户手写零门槛。</li>
+<li><strong>Score 收窄为 int/bool + 延迟批量聚合</strong>：Helicone 拒绝浮点、默认 10 分钟延迟聚合，是对 ClickHouse 类分析库非常务实的写入设计；平台定位做"score 汇聚器"（接任意外部评测框架的结果）而非绑定自家评测。</li>
+<li><strong>Prompt release label 解耦发布</strong>：代码里只写 <code>prompt_release_label="prod"</code>，改 prompt 不用发版；PromptLayer 的 zero-downtime 流程（新版本挂临时 label → 代码切换 → 晋升 prod）可直接抄成 Go 平台的 prompt/配置发布机制。</li>
+<li><strong>数据集从生产日志过滤生成</strong>：PromptLayer 的 <code>create_dataset_version_from_filter_params</code> 把"线上 bad case 回流成回归测试集"做成了一等 API，配合 CI 触发 eval pipeline（<code>/reports/{id}/run</code>），是测试平台闭环的关键一环。</li>
+<li><strong>双模接入并明码标价</strong>：同时提供代理模式（换取缓存/限流/重试等主动能力）与异步 SDK 模式（零延迟风险），并像 Helicone 一样在文档里明确写出 async 模式失去哪些功能——对 Go Agent 平台，等价物是 "gRPC 拦截器/中间件模式 vs 异步上报模式" 的功能矩阵。</li>
+</ol>
+<h3 id="28-agentops-laminar-lunary">2.8 AgentOps + Laminar + Lunary</h3>
+<p><strong>类别</strong>：agent 原生观测平台（tracing平台）</p>
+<h4 id="_45">定位与设计理念</h4>
+<ul>
+<li><strong>AgentOps</strong>（agentops.ai）：定位是"AI Agent 的 Observability 和 DevTool 平台"，覆盖从原型到生产。核心哲学是"两行代码接入、其余全自动"——<code>import agentops; agentops.init(API_KEY)</code> 后 SDK 自动识别已安装的 LLM provider 并埋点。取舍：牺牲后端可控性（自托管文档较薄），换取与十几个 agent 框架（OpenAI Agents SDK、CrewAI、AG2/AutoGen、LangChain、LlamaIndex、CamelAI、LiteLLM 等）的开箱集成和会话回放体验。</li>
+<li><strong>Laminar</strong>（lmnr-ai/lmnr，YC S24）：定位是"open-source observability platform for AI agents"，哲学是 OTel 原生 + 性能优先——Rust 后端、20x trace 压缩、SQL 直查 trace。取舍：不做重量级 prompt 管理，把评测做成"unopinionated 的 SDK/CLI"，把分析交给 SQL。</li>
+<li><strong>Lunary</strong>：定位是"面向 LLM 聊天机器人/生产应用的 developer toolkit"，主打观测 + prompt 管理 + 评测 + 防护（radar/guardrails）一体化，SOC 2/ISO 27001 认证，强调可自托管进 VPC。注意：其主仓库 lunary-ai/lunary 目前（2026-07）返回 404，官方 Python SDK 仓库已 archived，当前开源状态存疑（详见下文，部分信息来自历史 fork，标注未核实）。</li>
+</ul>
+<h4 id="_46">数据模型</h4>
+<ul>
+<li><strong>AgentOps</strong>：官方 core-concepts 文档给出明确层级：<code>SESSION</code>（根容器，"a single user interaction with your agent"）→ <code>AGENT</code>（自治组件）→ <code>WORKFLOW</code>（操作的逻辑分组）→ <code>OPERATION/TASK</code>（具体函数）→ <code>LLM</code> / <code>TOOL</code>（叶子 span）。整个模型是 OpenTelemetry span 的 kind 分类，LLM span 上自动挂 Model、Provider、token 数和 "Cost: The estimated cost of the interaction" 字段。</li>
+<li><strong>Laminar</strong>：OTel 原生的 trace/span 模型；在其上叠加 Datasets（含标注 UI）、Evals（SDK/CLI 产生的评测结果）、Signals（用自然语言描述的 agent 行为监控，如 "agent is stuck in a loop"）、SQL 可查询的 traces/spans/metrics/events 四类表。</li>
+<li><strong>Lunary</strong>：以事件流为中心：runs（llm/agent/tool/chain 类型的运行记录，含 cost/token/latency）、threads（对话线程，聊天回放的载体）、feedback（用户反馈绑定到 run）、templates（版本化 prompt）、radar 分类结果（按预定义规则给响应打标）、topics（自动话题分类）。字段级细节因主仓库不可访问，未核实。</li>
+</ul>
+<h4 id="_47">核心功能清单</h4>
+<ul>
+<li><strong>AgentOps</strong>：trace视图：有（"Session replays——step-by-step agent execution graphs"、瀑布/事件图 Event Graphs）；会话/线程：有（Session 即根实体，含 Chat Viewer）；playground：无（README/文档未见）；prompt管理：无；数据集：无；实验对比：无（有 benchmark 支持但非产品化实验对比）；评测：弱（未见产品化 eval）；标注/人工反馈：无；监控告警：弱（有 dashboard 分析，告警未核实）；成本核算：有且为强项（跨 provider 的 LLM Cost Management，span 级 cost 字段）。多 agent：有 "Multi-agent framework visualization"。</li>
+<li><strong>Laminar</strong>：trace视图：有（含实时 trace 查看的自研 real-time engine、全文检索）；会话/线程：有（session 概念，未核实细节）；playground：有（README 提及，需配 LLM provider，未核实细节）；prompt管理：无（非重点）；数据集：有（Datasets + 自定义标注 UI）；实验对比：有（evals 结果对比）；评测：有（unopinionated evals SDK + CLI，可进 CI/CD）；标注/人工反馈：有（annotation UI）；监控告警：有（Signals，自然语言定义行为 + Slack 通知；SQL dashboard builder）；成本核算：有（LLM span 自动记 cost，未核实粒度）。特色：MCP/CLI 用 SQL 查 trace，供 coding agent 使用；chat-with-trace。</li>
+<li><strong>Lunary</strong>：trace视图：有（agent tracing、logs/traces 调试）；会话/线程：有且为强项（threads/chat replay、用户级追踪）；playground：有（prompt 编辑测试，未核实）；prompt管理：有（版本化、协作、A/B 测试）；数据集：有（fine-tuning 数据集导出）；实验对比：有（dashboard 或 CI 触发评测）；评测：有（自定义 metric）；标注/人工反馈：有（feedback tracking、thumbs up/down 绑定 run）；监控告警：有（实时监控 + agent 表现异常通知）；成本核算：有（cost/token/latency 分析）。另有 radar（按预定义标准对 LLM 响应分类以便回查）、topics 自动分类、PII masking。</li>
+</ul>
+<h4 id="_48">接入与实现方式</h4>
+<ul>
+<li><strong>AgentOps</strong>：Python 装饰器族 <code>@session</code>/<code>@agent</code>/<code>@operation</code>/<code>@task</code>/<code>@workflow</code>，自动记录输入输出、异常，支持 async 与 generator 函数；同时 <code>init()</code> 后自动 monkey-patch 已安装的 LLM 库（"automatically identifies installed LLM providers and instruments their API calls"）。官方明确 "AgentOps is built on OpenTelemetry"。主 SDK 为 Python，仓库含 TypeScript（约 37.5%）。</li>
+<li><strong>Laminar</strong>：OpenTelemetry-native SDK（Python <code>lmnr</code> / TS <code>@lmnr-ai/lmnr</code>），"1 line of code" 自动埋 Vercel AI SDK、Browser Use、Stagehand、LangChain、OpenAI、Anthropic、Gemini 等；trace 经 gRPC exporter 上报——这意味着任何 OTLP 客户端（含 Go）理论上可直接对接其后端。</li>
+<li><strong>Lunary</strong>：SDK 包装器模式：JS 侧 <code>monitorOpenAI(new OpenAI())</code>、<code>monitorAnthropic(...)</code> 扩展客户端对象，支持流式；上下文通过 tags/userId/userProps 传递；有 LangChain JS/Python 回调、LiteLLM callback 集成。与 OTel 无关（自有事件协议）。Python SDK 仓库已 archived（后续接入方式未核实）。</li>
+</ul>
+<h4 id="_49">自托管与后端架构</h4>
+<ul>
+<li><strong>AgentOps</strong>：MIT license；仓库 <code>app/</code> 目录含开源的 Dashboard + API backend，可本机运行，但 README 未列出数据库/基础设施组件清单（存储选型未核实）。</li>
+<li><strong>Laminar</strong>：Apache-2.0；docker-compose-full.yml 共 6 个服务：<code>app-server</code>（Rust 后端，HTTP + gRPC + 实时 API）、<code>frontend</code>（Next.js）、<code>postgres</code>（16，应用状态）、<code>clickhouse</code>（分析型 trace 存储）、<code>rabbitmq</code>（异步摄取队列）、<code>quickwit</code>（v0.8.2，全文检索/日志索引）。另提供 lightweight 单命令 <code>docker compose up -d</code> 版本。注意：线索里的 "RabbitMQ/ClickHouse" 属实，且还有 Quickwit。</li>
+<li><strong>Lunary</strong>：历史上核心为 Apache-2.0，TypeScript monorepo（<code>packages/backend</code> + <code>packages/frontend</code>），PostgreSQL 15+ 单数据库，npm 迁移脚本，8080 端口（信息来自主仓库的 fork，现状未核实）；官方宣称支持 VPC 内 Kubernetes/Docker 部署，部分功能需 Enterprise license。主仓库当前 404，是否仍开放源码未核实。</li>
+</ul>
+<h4 id="hitl_7">人工介入与 HITL</h4>
+<ul>
+<li><strong>AgentOps</strong>：无断点/状态编辑/标注队列/审批流，仅回放式事后调试。</li>
+<li><strong>Laminar</strong>：有标注侧能力（Datasets 的 annotation UI 可视为轻量标注队列），无执行期断点/状态编辑/审批流。</li>
+<li><strong>Lunary</strong>：有人工反馈闭环（feedback tracking + radar 筛出问题响应供人工回查），无断点/状态编辑/审批流。三者均不做执行期 HITL——这是与 LangGraph 类框架层的明确分工。</li>
+</ul>
+<h4 id="_50">值得借鉴的点</h4>
+<ol>
+<li><strong>抄 AgentOps 的 span kind 枚举</strong>：SESSION/AGENT/WORKFLOW/TASK/LLM/TOOL 六级层级直接映射到 trpc-agent-go 的 Runner/Agent/Tool 概念，用 OTel span attribute（如 <code>agentops.span.kind</code>）实现，前端即可按 kind 渲染多 agent 瀑布图与回放。</li>
+<li><strong>成本作为 span 一等字段</strong>：AgentOps 在每个 LLM span 上物化 model/provider/tokens/cost，聚合到 session 级。Go 平台应在埋点层查价目表算 cost 而不是查询时算，否则模型价格变动会污染历史数据。</li>
+<li><strong>Laminar 的存储三分法</strong>：Postgres 存元数据/配置、ClickHouse 存 span 分析、Quickwit 做全文检索、RabbitMQ 解耦摄取。Go 生态可直接复刻（ClickHouse + NATS/RabbitMQ），摄取路径与查询路径分离是高吞吐 agent trace 的关键。</li>
+<li><strong>只做 OTLP gRPC 摄取口</strong>：Laminar 证明"OTel 原生"能让任意语言 SDK（包括 Go 的官方 otel-sdk）零成本接入，平台不必自造上报协议；agent 语义用 span attributes 约定即可。</li>
+<li><strong>SQL-over-traces + MCP</strong>：Laminar 把 trace 暴露为 SQL 可查表并提供 MCP server，让 coding agent 自己查线上 trace 调试——对"Agent 测试平台"这是天然的测试断言接口（断言某 trace 中 tool 调用次数/顺序）。</li>
+<li><strong>Lunary 的 radar 模式</strong>：用预定义规则持续对生产响应分类打标、沉淀成待人工复查队列，是低成本的"生产数据→测试用例"回流机制，比全量人工标注可行得多。</li>
+</ol>
+<h3 id="29-opentelemetry-genai-openllmetry-traceloop">2.9 OpenTelemetry GenAI 语义约定 + OpenLLMetry (Traceloop)</h3>
+<p><strong>类别</strong>：标准层 / OTel 自动埋点库</p>
+<h4 id="_51">定位与设计理念</h4>
+<p>这不是一个平台，而是「标准 + 埋点库」的组合，解决的是 LLM 可观测数据的<strong>互操作性</strong>问题：OTel GenAI 语义约定定义了 LLM/Agent 遥测数据「长什么样」（统一的 span/event/metric 命名与属性 schema），OpenLLMetry 则是把主流 LLM SDK 调用「自动翻译」成这种标准数据的埋点库集合。核心取舍是：<strong>不绑定任何后端</strong>——数据以 OTLP 协议输出，可以打到 Datadog、Grafana、Langfuse、SigNoz 等 20+ 目的地。行业收敛到 OTLP 作 ingest 标准的原因由此可见：埋点方只写一次（instrumentation 与 vendor 解耦），后端方只解析一种协议（凭 <code>gen_ai.*</code> 属性即可渲染 LLM 专用 UI），双边成本都最低。一句话哲学：「LLM 可观测只是可观测的一个子域，复用 OTel 全套管线（SDK/Collector/OTLP），只新增语义层」。</p>
+<p>重要时效信息：<strong>GenAI 语义约定已于近期从 OTel 主 semconv 仓库迁出</strong>，主仓库中的 gen_ai 内容已标记 deprecated，现由独立仓库 open-telemetry/semantic-conventions-genai 维护（用 Weaver 管理对核心 semconv 的依赖），整体仍处 Development（非 Stable）状态。</p>
+<h4 id="_52">数据模型</h4>
+<p>语义约定层的实体全部是标准 OTel 三信号，靠属性命名承载语义：
+- <strong>Span（五大类）</strong>：Inference / Embeddings / Retrieval / Memory / Execute Tool。span 名约定为 <code>{gen_ai.operation.name} {gen_ai.request.model}</code>（如 <code>chat gpt-4</code>）。必填属性：<code>gen_ai.operation.name</code>、<code>gen_ai.provider.name</code>（新版取代了旧的 <code>gen_ai.system</code>）；推荐属性：<code>gen_ai.request.model</code>、<code>gen_ai.response.model/finish_reasons</code>、<code>gen_ai.usage.input_tokens/output_tokens</code>、<code>error.type</code>。SpanKind 规则：跨进程调用用 CLIENT，进程内框架操作用 INTERNAL。
+- <strong>Agent Span</strong>：操作名包括 <code>create_agent</code>、<code>invoke_agent</code>、<code>plan</code>、<code>invoke_workflow</code>、<code>execute_tool</code>；属性 <code>gen_ai.agent.id/name/description/version</code>、<code>gen_ai.tool.name</code> 等。层级关系：<code>invoke_agent</code> 为父 span，plan span 内含子 LLM 调用，tool 执行 span 与 task span 作为兄弟节点挂在 invoke_agent 下。
+- <strong>会话</strong>：<code>gen_ai.conversation.id</code> 属性（要求业务上确实存在会话 ID 时才填，明确禁止用 UUID/trace ID 合成兜底）——即"session"不是独立实体，而是 span 上的关联键。
+- <strong>内容承载（属性 vs 事件的取舍）</strong>：prompt/completion 以结构化 JSON schema 定义为 <code>gen_ai.input.messages</code> / <code>gen_ai.output.messages</code>，可作为 span 属性（不支持结构化时记为 JSON 字符串）或放入事件 <code>gen_ai.client.inference.operation.details</code>（取代了早期按消息拆分的 gen_ai.user.message/gen_ai.choice 事件设计）。所有内容类字段均为 <strong>Opt-In 级别</strong>：规范明文要求默认不采集，由 <code>OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT</code> 类开关控制。
+- <strong>Score/评测</strong>：定义了 <code>gen_ai.evaluation.result</code> 事件（必填 metric 名，条件必填 score 数值与 label，推荐 explanation 与 response ID）——标准层已为"评测结果回传 trace"预留了 schema。
+- <strong>Metrics</strong>：全部为 Histogram。客户端：<code>gen_ai.client.token.usage</code>（单位 {token}）、<code>gen_ai.client.operation.duration</code>（秒）、time_to_first_chunk、time_per_output_chunk；服务端：<code>gen_ai.server.request.duration</code>、time_to_first_token、time_per_output_token；Agent 维度：<code>gen_ai.workflow.duration</code>、<code>gen_ai.invoke_agent.duration</code>、<code>gen_ai.execute_tool.duration</code>。</p>
+<p>OpenLLMetry 的数据模型在此之上加了一层自有命名空间：<code>traceloop.span.kind</code>（枚举 workflow/task/agent/tool）、<code>traceloop.workflow.name</code>、<code>traceloop.entity.name/path/input/output</code>、<code>traceloop.association.properties</code>（关联 user_id 等业务属性）、<code>traceloop.prompt.key/version/template</code> 等。注意它的 gen_ai 属性与最新 semconv 有偏差（如用 <code>gen_ai.usage.prompt_tokens/completion_tokens</code> 而非 input/output_tokens，用扁平化 <code>gen_ai.prompt</code>/<code>gen_ai.completion</code> 承载内容），另有向量库属性 <code>db.vector.query.top_k/result_count</code> 等。</p>
+<h4 id="_53">核心功能清单</h4>
+<p>（注意：以下针对"标准+埋点库"本身；配套商业平台 Traceloop 的功能未打开其产品文档，标未核实）
+- <strong>trace 视图</strong>：无（只产出数据，渲染靠下游后端）
+- <strong>会话/线程</strong>：仅提供 <code>gen_ai.conversation.id</code> 关联键，无 UI
+- <strong>playground</strong>：无
+- <strong>prompt 管理</strong>：OpenLLMetry 有 <code>traceloop.prompt.key/version/version_hash/template/template_variables</code> 属性用于把 trace 关联到 Traceloop 平台的 prompt registry（平台侧功能细节未核实）；语义约定层无
+- <strong>数据集</strong>：无
+- <strong>实验对比</strong>：无
+- <strong>评测</strong>：标准层有 <code>gen_ai.evaluation.result</code> 事件 schema（承载评测结果，不执行评测）；OpenLLMetry 本身不做评测
+- <strong>标注/人工反馈</strong>：无
+- <strong>监控告警</strong>：无（但 metrics 定义使得任何 Prometheus/Grafana 栈可直接告警）
+- <strong>成本核算</strong>：无直接功能；<code>gen_ai.client.token.usage</code> 直方图 + request.model 维度是成本计算的原料</p>
+<h4 id="_54">接入与实现方式</h4>
+<p>OpenLLMetry 是<strong>纯 OTel 自动埋点（monkey-patch）+ 装饰器</strong>形态，Apache-2.0：
+- 每个 provider/框架一个独立 pip 包（<code>opentelemetry-instrumentation-openai/-anthropic/-bedrock/...</code>），覆盖 16+ LLM 提供商（OpenAI/Azure、Anthropic、Bedrock、Vertex、Gemini、Cohere、Mistral、Ollama、Watsonx 等）、7 个向量库（Pinecone、Chroma、Qdrant、Milvus、Weaviate、LanceDB、Marqo）、11+ 框架（LangChain、LlamaIndex、CrewAI、Haystack、LiteLLM、LangGraph、OpenAI Agents、MCP 等）。
+- <code>traceloop-sdk</code> 是一层胶水：<code>Traceloop.init()</code> 一行启用全部 instrumentation，并提供 <code>@workflow</code>/<code>@task</code>/<code>@agent</code>/<code>@tool</code> 装饰器手工划分业务层级（写入 traceloop.span.kind）。
+- 语言支持：Python 为主，JS/TS 另有 openllmetry-js；<strong>Go 版（traceloop/go-openllmetry）仅早期 alpha</strong>，无自动埋点，需手动调 <code>LogPrompt()/LogCompletion()</code>，最近 release 为 2025-11 的 v0.1.3——对 Go 生态而言，自动埋点这条路目前是空白。
+- <strong>内容捕获与隐私</strong>：默认记录 prompt/completion（<code>TRACELOOP_TRACE_CONTENT</code> 默认 "true"，设 false 关闭），且支持运行时按请求覆盖——<code>should_send_prompts()</code> 同时检查环境变量与 OTel context 中的 <code>override_enable_content_tracing</code> 键，二者任一为真即记录，实现"全局关、特定用户/请求开"的细粒度控制。这与 OTel 规范的"默认不采集、显式 opt-in"方向相反，是它常被诟病的点。另外自 0.49.2 起 SDK 不再回传任何自身使用遥测。</p>
+<h4 id="_55">自托管与后端架构</h4>
+<p>OpenLLMetry <strong>没有后端</strong>——它是纯客户端库，数据经 OTLP exporter 直发或经 OTel Collector 中转到 23 个受支持目的地（Datadog、Honeycomb、New Relic、Grafana、SigNoz、Splunk、Langfuse 等）。不存在存储选型、队列问题；"自托管"即自托管任意 OTLP 兼容后端。开源协议 Apache-2.0（Python/JS/Go 三个仓库一致）。Traceloop 商业平台的自托管/混合部署形态未核实。</p>
+<h4 id="hitl_8">人工介入与 HITL</h4>
+<p>无。无断点、无状态编辑、无标注队列、无审批流——标准层最接近的只有 <code>gen_ai.evaluation.result</code> 事件可承载人工评分结果，但采集与流转需平台自建。</p>
+<h4 id="_56">值得借鉴的点</h4>
+<ol>
+<li><strong>直接把 OTel GenAI semconv 作为你平台的 ingest schema</strong>：trpc-agent-go 平台只要 span 上带 <code>gen_ai.operation.name</code>/<code>gen_ai.provider.name</code>/<code>gen_ai.usage.*</code>，就能被 Grafana/Datadog/Langfuse 全生态消费，也能反向接收任何 OpenLLMetry 埋点应用的数据。注意用新仓库（semantic-conventions-genai）的属性名（<code>gen_ai.provider.name</code>、<code>input_tokens</code>），旧名已 deprecated。</li>
+<li><strong>抄 agent span 层级模型</strong>：<code>invoke_agent</code> 为根、<code>plan</code>（内含 LLM 子 span）与 <code>execute_tool</code> 为子/兄弟节点、<code>invoke_workflow</code> 编排多 agent——这套父子关系可直接映射 trpc-agent-go 的 Runner/Agent/Tool 调用栈，UI 树状渲染有现成规则可依。</li>
+<li><strong>内容捕获做三态开关</strong>：结合两家做法——规范的"默认关 + <code>OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT</code> 全局开"，加上 OpenLLMetry 的 context 级 <code>override_enable_content_tracing</code> 按请求覆盖。生产环境默认脱敏、调试会话/白名单租户单独放开，这是隐私合规和可调试性的最优平衡。</li>
+<li><strong>内容放结构化 messages 属性而非拆散的事件</strong>：<code>gen_ai.input/output.messages</code> 的 JSON schema 让后端能还原完整多轮对话（含 tool_call），比旧的按消息发事件方案查询开销小得多；同时保留 events 通道给超大 payload（span 属性有大小限制时降级到 event/log）。</li>
+<li><strong>traceloop.span.kind 式的业务分层装饰器</strong>：workflow/task/agent/tool 四级枚举 + <code>traceloop.entity.input/output</code>，在 Go 里可做成 <code>trace.WithSpanKind()</code> 风格的 option 或中间件，让用户在自动埋点之上标注业务语义——trace 视图按 workflow 聚合的前提就是这个属性。</li>
+<li><strong>Go 自动埋点是市场空白</strong>：go-openllmetry 仍是手动 Log 的 alpha 状态。trpc-agent-go 若在框架层内建符合 semconv 的自动埋点（框架埋点不需要 monkey-patch，天然优势），即是 Go 生态的差异化能力。</li>
+</ol>
+<h3 id="210-langgraph-studio-google-adk-web-ui">2.10 LangGraph Studio + Google ADK Web UI</h3>
+<p><strong>类别</strong>：调试UI（开发期单机调试台）</p>
+<h4 id="_57">定位与设计理念</h4>
+<p>两者都是"开发期调试台"，而非生产观测平台。LangGraph Studio 官方定义为 "specialized agent IDE"：可视化、交互、调试实现了 Agent Server API 协议的 agent 系统，并与 LangSmith 的 tracing/评测/prompt 工程集成。它的核心取舍是：调试对象不是"日志/trace"，而是<strong>可执行的活体 graph</strong>——UI 直接连到一个正在运行的 agent server，因此能改状态、重放、打断点，而不只是事后看 trace。ADK Web 的定位更明确："built-in developer UI……for easier agent development and debug"，文档用醒目警告写明 "ADK Web is not meant for use in production deployments"。一句话哲学：<strong>生产观测平台回答"发生了什么"，开发调试台回答"如果改一下会怎样"</strong>——前者只读，后者可写（编辑状态、fork、重放、改 eval case）。</p>
+<h4 id="_58">数据模型</h4>
+<p><strong>LangGraph Studio</strong>（复用 LangGraph/LangSmith 模型）：<code>assistant</code>（graph + 配置的版本化实例）→ <code>thread</code>（会话，携带持久状态）→ <code>run</code>（一次执行，追加到 thread）→ <code>checkpoint</code>（每个超步后的状态快照，含 <code>thread_id</code> + <code>checkpoint_id</code>，通过 <code>get_state_history</code> 枚举，<code>state.next</code> 标记下一个待执行节点）。评测侧对接 LangSmith 的 <code>dataset / example / experiment / evaluator / feedback</code> 实体。时间旅行的全部能力都建立在 checkpoint 链上。
+<strong>ADK Web</strong>：<code>session</code>（含 <code>state</code> 键值字典 + <code>events</code> 列表）→ <code>event</code>（执行事件，含 <code>state_delta</code>/<code>artifact_delta</code>）→ <code>invocation</code>（按用户消息分组的一轮执行）；trace 是 OpenTelemetry 风格的 span，按 user message 分组展示。评测实体为 <code>EvalSet</code>（<code>eval_set_id</code>、<code>eval_cases[]</code>）→ <code>EvalCase</code>（<code>eval_id</code>、<code>conversation[]</code>、<code>session_input</code>{app_name,user_id,state}）→ 每轮 invocation 含 <code>invocation_id</code>、<code>user_content</code>、<code>final_response</code>、<code>intermediate_data.tool_uses[]</code>（含 args/name）与 <code>intermediate_responses</code>（子 agent 中间回复），由正式 Pydantic schema（eval_set.py/eval_case.py）背书。</p>
+<h4 id="_59">核心功能清单</h4>
+<p><strong>LangGraph Studio</strong>：trace 视图——有（可从 LangSmith trace 一键 "Run in Studio"，还能把远程 trace 的 thread 克隆到本地 agent 调试）；会话/线程——有（thread 列表、状态逐节点展开、Pretty/JSON 切换）；playground——有（View LLM Runs 打开节点内单次 LLM 调用调参）；prompt 管理——有（节点直改 prompt + 保存为新 assistant 版本）；数据集——有（Add to Dataset 把节点输入输出存成 example）；实验对比——有（Run experiment 对 LangSmith dataset 跑整个 assistant，evaluator 自动打分，结果跳 LangSmith 看）；评测——有（依托 LangSmith evaluator）；标注/人工反馈——Studio 本体无独立标注队列（LangSmith 侧有 feedback，未在 Studio 页面核实）；监控告警——无；成本核算——无。
+<strong>ADK Web</strong>：trace 视图——有（Trace tab，行悬停联动聊天消息，点击出 Event/Request/Response/Graph 四面板，蓝色行表示产生了 event）；会话——有（session 创建/切换）；state 检查——有且<strong>可修改</strong>；artifacts 检查——有；playground——无（无独立单次 LLM 调参界面）；prompt 管理——无；数据集——无通用 dataset，但有 eval set 管理；实验对比——弱（eval 历史记录每次 run 的指标，无正式实验对比视图）；评测——有（Eval tab：建 eval set → "Add current session" 把当前会话存为 case → 铅笔编辑 case → 滑杆配置 tool_trajectory_avg_score / response_match_score 阈值 → Run Evaluation，失败项悬停看 Actual vs Expected 对比）；标注——无；监控告警——无；成本核算——无。另有 Visual Builder（拖拽建 agent，Python only）和 <code>adk conformance</code> 录制回放测试。</p>
+<h4 id="_60">接入与实现方式</h4>
+<p><strong>LangGraph Studio</strong>：零埋点——不是 SDK 插桩，而是<strong>协议接入</strong>：<code>langgraph dev</code> 启动本地 Agent Server（默认端口 2024），Studio 前端托管在 smith.langchain.com，通过 <code>?baseUrl=http://127.0.0.1:2024</code> 连本地 server（需 LangSmith API key）。所有可观测数据来自 checkpointer 落的 checkpoint 和 server API，与 OTel 无直接关系；prompt 可编辑性靠 graph 配置 schema 里的 <code>json_schema_extra: {"langgraph_nodes": [...], "langgraph_type": "prompt"}</code> 元数据声明。<code>langgraph dev</code> 还内置 DAP（Debug Adapter Protocol）支持，可挂 IDE 断点。
+<strong>ADK Web</strong>：框架自动埋点——ADK runtime 内置 OpenTelemetry 兼容 instrumentation，Trace tab 直接消费；Go 版可加 <code>-otel_to_cloud</code> 导出到 Cloud Trace，Python 用 <code>telemetry.maybe_set_otel_providers()</code> 注册全局 OTel provider。前端是独立 Angular 应用（adk-web 仓库），靠 <code>adk api_server</code> 暴露的 REST API 工作；Go 版则以库形式嵌入：<code>full.NewLauncher()</code> 把 web server、REST API、Web UI 打进单个二进制，<code>go run agent.go web api webui</code> 启动。</p>
+<h4 id="_61">自托管与后端架构</h4>
+<p><strong>LangGraph</strong>：<code>langgraph dev</code>——单进程内存态、状态 pickle 到本地目录、热重载、无 Docker；<code>langgraph up</code>——Docker 三容器（API server + PostgreSQL 持久化 + Redis），默认端口 8123，模拟生产。Studio UI 本身不开源、云端托管；LangGraph 框架开源。生产部署走 LangSmith Cloud 或 Self-hosted（自托管 Studio 细节未核实）。
+<strong>ADK Web</strong>：完全本地单机。Python <code>adk web</code> 默认 8000 端口，session 默认 in-memory，可 <code>--session_service_uri "sqlite:///sessions.db"</code>；artifact 默认落本地 <code>.adk/artifacts</code>。Go 版 trace 默认内存保留 1 万条（<code>-trace_capacity</code>，默认 10000）。前端 adk-web 为 Apache 2.0 开源。无队列、无独立数据库组件——这正是"调试台"与"平台"的架构分界。</p>
+<h4 id="hitl_9">人工介入与 HITL</h4>
+<p><strong>LangGraph Studio</strong>：最完整。断点——Interrupt 按钮选任意节点、选 pause before/after，thread log 里点 Continue 恢复（即 LangGraph interrupt 机制的 UI 化，断点即 HITL）；状态编辑——"Edit node state" 改任意节点输出后点 Fork，从该 checkpoint 派生新分支运行；重放——"Re-run from here" 不改状态直接从 checkpoint 重跑（可换 assistant 配置）。底层语义清晰：replay = 拿旧 checkpoint config 再 invoke（checkpoint 之前的节点不重执行，之后的节点真实重跑，LLM 调用会再次发生）；fork = <code>update_state</code> 在旧 checkpoint 上创建分支 checkpoint，<strong>原历史不可变</strong>。Chat mode 还支持编辑 human message 后 fork 会话。无标注队列/审批流。
+<strong>ADK Web</strong>：可查看并修改 session state、可编辑 eval case 里的 agent 回复，但无节点级断点、无 checkpoint fork/重放（conformance 的 replay 是录制回放测试，不是交互式 time-travel）。无标注队列/审批流。</p>
+<h4 id="_62">值得借鉴的点</h4>
+<ol>
+<li><strong>Checkpoint-first 的时间旅行模型</strong>：trpc-agent-go 若在 Runner 每个事件/步骤后落不可变 checkpoint（thread_id + checkpoint_id 链表），"暂停/编辑状态/fork 重放"就全是免费能力——fork 只是"在旧 checkpoint 上写一个分支 checkpoint 再 resume"，实现成本低而调试价值极高；关键设计是<strong>历史不可变、fork 产生新分支</strong>，避免状态回滚的正确性泥潭。</li>
+<li><strong>"本地 server + 托管 UI"接入模式</strong>：LangGraph Studio 用 <code>?baseUrl=localhost:2024</code> 让云 UI 直连本地进程，用户零部署就能用最新 UI。Go 平台可定义一个小型 Debug Server API 协议（threads/state/checkpoints/interrupt），UI 与框架解耦、可独立演进。</li>
+<li><strong>"Add current session → eval case" 闭环</strong>：ADK 把"聊出一个好/坏例子"一键固化为可编辑、可回归的 eval case（含 tool_uses 轨迹 groundtruth），并配 tool_trajectory_avg_score（轨迹精确匹配）+ response_match_score（ROUGE-1）两个廉价确定性指标跑 CI。这是测试平台最该抄的工作流：调试数据直接变测试资产。</li>
+<li><strong>trace 行与聊天消息双向联动 + Event/Request/Response/Graph 四面板</strong>：ADK Trace tab 把"发给 LLM 的原始 request"作为一等公民展示，这是 agent 调试最高频需求；成本仅为内存 ring buffer（默认 1 万条），无需数据库。</li>
+<li><strong>prompt 可编辑性靠 schema 元数据声明</strong>（langgraph_nodes/langgraph_type）：框架不猜哪个字段是 prompt，由开发者在配置 schema 上标注，UI 据此渲染编辑入口并版本化为新 assistant——Go 里可用 struct tag 实现同样机制。</li>
+<li><strong>明确划清 dev/prod 边界</strong>：ADK 在文档显著位置声明 dev-only，同时留 <code>-otel_to_cloud</code>/OTel provider 出口把生产观测交给外部平台；LangGraph 用 dev（内存）/up（PG+Redis）双命令分层。调试台不必做保留策略、告警、成本核算，做薄反而好用。</li>
+</ol>
+<h3 id="211-openai-agents-sdk-tracing-mlflow-tracing">2.11 OpenAI Agents SDK Tracing + MLflow Tracing</h3>
+<p><strong>类别</strong>：框架内建tracing / 开源观测平台（tracing平台）</p>
+<h4 id="_63">定位与设计理念</h4>
+<p><strong>OpenAI Agents SDK Tracing</strong> 是 agent 框架"内建 tracing"的代表：SDK 自带一套非 OTel 的私有 trace/span 模型，默认开启、零配置，把 agent loop 的每个语义步骤（LLM 调用、工具、handoff、guardrail、语音）自动埋点，数据默认发到 OpenAI 托管的 Traces dashboard（platform.openai.com/traces，免费但不可自托管；ZDR 组织不可用）。核心取舍：牺牲 OTel 标准化，换取与框架语义完全对齐的类型化 span 和"装完即用"的体验；同时通过极简的 <code>TracingProcessor</code> 接口把导出目的地插件化，形成了 25+ 家厂商的外部 processor 生态。一句话哲学：框架负责产生高质量语义化 trace，去哪儿消费由 processor 插件决定。</p>
+<p><strong>MLflow Tracing</strong>（MLflow 3.x，Linux 基金会项目，Apache-2.0）是框架无关的开源自托管观测平台：完全 OTel 兼容（可 ingest 也可 export，支持 GenAI Semantic Conventions），靠 autolog 一行代码给 40+ 框架/模型库自动埋点，trace 落到 MLflow Experiment，与评测、数据集、prompt 管理组成端到端平台。一句话哲学：用 OTel 标准 + 自有存储换取无厂商锁定的完整 LLMOps 闭环。</p>
+<h4 id="_64">数据模型</h4>
+<p><strong>OpenAI Agents SDK</strong>：Trace 表示一次 workflow 端到端运行，字段：<code>workflow_name</code>、<code>trace_id</code>（格式必须为 <code>trace_&lt;32位字母数字&gt;</code>）、<code>group_id</code>（可选，用于把同一会话/线程的多条 trace 关联，如 chat thread ID）、<code>disabled</code>、<code>metadata</code>。Span 有 <code>started_at/ended_at</code>、<code>trace_id</code>、<code>parent_id</code>、以及类型化的 <code>span_data</code>（<code>AgentSpanData</code>、<code>GenerationSpanData</code>、function/guardrail/handoff/transcription/speech/custom 等）。无内置 score/评测实体。</p>
+<p><strong>MLflow</strong>：Trace = <code>TraceInfo</code> + <code>TraceData</code> 两部分。<code>TraceInfo</code> 是轻量元数据行：<code>trace_id</code>、<code>trace_location</code>（目前即 Experiment）、<code>request_time</code>、<code>state</code>（OK/ERROR/IN_PROGRESS/STATE_UNSPECIFIED）、<code>execution_duration</code>、<code>request_preview</code>/<code>response_preview</code>（根 span 输入输出的截断预览）、<code>client_request_id</code>、<code>trace_metadata</code>（不可变，如 session/user）、<code>tags</code>（可变，用于过滤）。<code>TraceData</code> 是 Span 树；Span 字段：<code>span_id</code>、<code>trace_id</code>、<code>parent_id</code>、<code>name</code>、<code>start/end_time_ns</code>、<code>status</code>、<code>inputs/outputs</code>、<code>attributes</code>、<code>events</code>（异常栈），带 <code>SpanType</code>（CHAT_MODEL/LLM/CHAIN/AGENT/TOOL/RETRIEVER/ROUTER 等）。会话经 <code>session_id</code>/<code>user</code> 元数据实现（3.11.0 起有专用参数）。质量信号是一等实体：<code>Feedback</code>/<code>Expectation</code>（统称 Assessment）挂在 trace 或具体 span 上，带 <code>AssessmentSource</code>（HUMAN/LLM_JUDGE 等）与修订历史。</p>
+<h4 id="_65">核心功能清单</h4>
+<p><strong>OpenAI Agents SDK Tracing</strong>：trace 视图——有（托管 Traces dashboard）；会话/线程——仅 <code>group_id</code> 关联，无会话 UI 实体；playground——无（SDK 层面）；prompt 管理——无；数据集——无；实验对比——无；评测——无（SDK 另有 evals 产品，tracing 本身无）；标注/人工反馈——无；监控告警——无；成本核算——无。功能面窄，定位纯埋点+导出。</p>
+<p><strong>MLflow Tracing</strong>：trace 视图——有（UI + IDE/notebook 内联展示、搜索/过滤 <code>search_traces</code>）；会话/线程——有（session/user 追踪与分组）；playground——有（LLM Playground，多轮对话、采样参数、tools、结构化输出，接 AI Gateway 与 Prompt Registry）；prompt 管理——有（Prompt Registry，版本+alias 生命周期、prompt 优化）；数据集——有（Evaluation Datasets，可从生产 trace 建集，要求 SQL 后端）；实验对比——有（Experiment 体系、回归测试）；评测——有（scorers/LLM judges、离线评测 + 生产流量自动在线评测，judge 支持采样率与过滤条件）；标注/人工反馈——有（UI/API <code>mlflow.log_feedback</code>，多标注人聚合）；监控告警——监控 dashboard 有（延迟、token 用量），原生告警未在所读文档中见到（未核实）；成本核算——有 token 用量与成本追踪（token-usage-cost 文档）。</p>
+<h4 id="_66">接入与实现方式</h4>
+<p><strong>OpenAI Agents SDK</strong>：运行时自动埋点——<code>Runner.run()</code> 整体包在 <code>trace()</code> 中，agent 每次运行包 <code>agent_span()</code>，LLM 生成包 <code>generation_span()</code>，工具/guardrail/handoff 各有对应 <code>*_span()</code>。当前 trace/span 通过 Python <code>contextvar</code> 传播（天然并发安全）；<code>with trace(...)</code> 可把多次 run 聚成一条 trace；<code>custom_span()</code> 自定义。敏感数据可用 <code>RunConfig.trace_include_sensitive_data</code>（默认 True）和环境变量关闭。插件化架构：全局 <code>TraceProvider</code> → 默认 <code>BatchTraceProcessor</code>（后台队列，默认 max_queue_size=8192、max_batch_size=128、5 秒调度，进程退出前 flush，另提供 <code>flush_traces()</code> 供 Celery/后台任务强刷）→ <code>BackendSpanExporter</code> POST 到 <code>https://api.openai.com/v1/traces/ingest</code>。扩展点两个：<code>add_trace_processor()</code> 追加（多写）、<code>set_trace_processors()</code> 整体替换（不再发 OpenAI）。<code>TracingProcessor</code> 抽象类仅 6 个方法：<code>on_trace_start/on_trace_end/on_span_start/on_span_end/shutdown/force_flush</code>。与 OTel 无关（Langfuse 等厂商在自己的 processor 里做模型转换）。</p>
+<p><strong>MLflow</strong>：三种方式並用——(1) autolog：<code>mlflow.openai.autolog()</code> 等一行开启，覆盖 OpenAI Agents SDK、LangChain/LangGraph、LlamaIndex、DSPy、Anthropic、Bedrock、CrewAI 等大量库（含 TS 侧）；(2) 手动：<code>@mlflow.trace</code> 装饰器（支持 sync/async/generator，自动记录函数名、输入输出、异常事件，自动挂父子关系）、<code>mlflow.start_span</code> 上下文管理器、<code>mlflow.trace(fn)</code> 包装第三方函数；(3) 纯 OTel：任何语言（含 Go）用标准 OTLP 直接打到 MLflow Server 的 <code>/v1/traces</code> 端点。导出侧同样标准：设 <code>OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</code> 即转发 Datadog/Grafana/Jaeger 等，支持 dual export（MLflow + OTel 后端双写）。</p>
+<h4 id="_67">自托管与后端架构</h4>
+<p><strong>OpenAI Agents SDK</strong>：SDK 本身 MIT 开源，但默认后端（Traces dashboard）是 OpenAI 托管服务，无自托管选项；自托管需换 processor 接第三方（官方列表点名 MLflow self-hosted/OSS、Langfuse 等）。</p>
+<p><strong>MLflow</strong>：Apache-2.0，四组件——多语言 SDK（Python/TypeScript/Java/R）；Backend Store（经 SQLAlchemy 支持 postgresql/mysql/sqlite/mssql，存 experiment/trace 元数据）；Artifact Store（S3 等对象存储，存大文件与 trace attachments）；Tracking Server（FastAPI，REST API + UI，可 Docker Compose、K8s Helm、AWS/Azure/GCP 部署，支持 basic auth/SSO/RBAC/workspaces 多租户）。存储布局值得注意：<code>TraceInfo</code> 一行存 <code>trace_info</code> 表；3.3.0 起每个 span 以 JSON 单行存 <code>spans</code> 表（此前存 artifact store，改动原因是查询性能与事务一致性）；二进制附件（图/音频/PDF）仍走 artifact store，span 内只留 <code>mlflow-attachment://</code> 引用 URI。无独立队列组件，靠客户端 async logging（默认开启，10 worker 线程、1000 队列、满则丢弃、带重试退避）+ <code>MLFLOW_TRACE_SAMPLING_RATIO</code> trace 级采样；生产另有轻量 <code>mlflow-tracing</code> SDK 包（依赖极少，与完整包互斥）。</p>
+<h4 id="hitl_10">人工介入与 HITL</h4>
+<p><strong>OpenAI Agents SDK tracing</strong>：无任何 HITL 能力（SDK 的 HITL 属于 agent 运行层，不在 tracing 面）。<strong>MLflow</strong>：无执行断点/状态编辑（它是观测层不是运行时），但标注侧完整：UI/API 双通道 feedback（<code>mlflow.log_feedback</code>，带 source 类型 HUMAN/LLM_JUDGE、rationale、修订历史）；Expectation（人工标 ground truth）；3.14.0 起有实验性 <strong>Review Queues</strong>——把 trace 打包成队列、定义结构化问题（Pass/Fail、分类、打分、自由文本）、指派多个 reviewer、共享 pending/complete/declined 状态，答案回写到 trace 直接供评测使用。</p>
+<h4 id="_68">值得借鉴的点</h4>
+<ol>
+<li><strong>抄 TracingProcessor 的 6 方法接口</strong>（on_trace_start/end、on_span_start/end、shutdown、force_flush）+ add/set 两个注册函数（追加 vs 替换语义）。这是被 25+ 厂商验证过的最小插件面，Go 里就是一个 interface + 注册函数，你的平台后端只需实现一个 processor 就能接入任何采用此模式的框架。</li>
+<li><strong>类型化 span_data 而非扁平 attributes</strong>：AgentSpanData/GenerationSpanData/HandoffSpanData 等按 agent 语义强类型建模，UI 可以针对每类 span 做专用渲染（handoff 画箭头、generation 显示消息列表）。Go 中用带 tag 的 struct 实现比 map[string]any 更利于消费端。</li>
+<li><strong>默认 BatchTraceProcessor + 显式 flush_traces()</strong>：后台队列（8192/128/5s）+ 退出钩子 + 供短命 worker 调用的强刷 API，这是把埋点开销降到可默认开启的关键工程细节；MLflow 侧对应的"队列满即丢弃 + 重试超时"策略也值得照搬——观测数据宁可丢不可阻塞业务。</li>
+<li><strong>学 MLflow 的 TraceInfo/TraceData 分离存储</strong>：元数据一行进 <code>trace_info</code> 表撑列表页与过滤，span JSON 单行进 <code>spans</code> 表，二进制附件进对象存储留引用 URI。MLflow 3.3.0 专门把 span 从对象存储迁回 DB，说明"列表查询走索引、详情走 DB、大块走对象存储"是踩过坑后的结论。</li>
+<li><strong>OTLP ingest 端点（/v1/traces）+ GenAI SemConv 作为 Go 生态的接入正道</strong>：MLflow 明确用它覆盖 Java/Go/Rust 等无原生 SDK 的语言。你的平台做一个 OTLP receiver + SemConv 映射，trpc-agent-go 只需内建 OTel exporter 即可对接自家平台和一切 OTel 后端。</li>
+<li><strong>敏感数据开关做在 RunConfig/env 两级</strong>（trace_include_sensitive_data 控制 LLM/工具输入输出是否入 span），以及 MLflow 的 trace 级采样 + 生产 judge 按采样率/过滤串自动评测——这三个"生产化旋钮"（脱敏、采样、在线评测）应在数据模型设计初期就预留。</li>
+</ol>
+<h3 id="212-promptfoo-deepeval">2.12 promptfoo + DeepEval</h3>
+<p><strong>类别</strong>：评测工具</p>
+<h4 id="_69">定位与设计理念</h4>
+<p><strong>promptfoo</strong> 是一个 CLI + 库形态的 LLM 应用评测与红队测试工具（TypeScript/Node，MIT 协议）。README 声明其已并入 OpenAI（"Promptfoo is now part of OpenAI. Promptfoo remains open source and MIT licensed."），但仍保持开源。核心哲学：<strong>声明式、本地优先</strong>——用一份 YAML 描述 providers × prompts × tests 的笛卡尔积矩阵，"LLM evals run 100% locally"，prompt 不出本机。取舍：牺牲编程灵活性换取零代码上手和可 diff 的配置。</p>
+<p><strong>DeepEval</strong>（confident-ai 出品，Python，Apache 2.0）自我定位为"LLM 应用的 Pytest"：把 LLM 评测塞进开发者熟悉的单元测试工作流，LLM-as-a-judge 与 NLP 模型均可本地运行。取舍与 promptfoo 相反：<strong>代码优先</strong>，指标是可实例化、可继承的 Python 类，胜在可编程性；配套商业云平台 Confident AI 承担数据集管理、tracing 和生产监控。</p>
+<p>一句话：promptfoo 是"YAML 驱动的评测矩阵引擎"，DeepEval 是"pytest 风格的指标断言库"。</p>
+<h4 id="_70">数据模型</h4>
+<p>两者都是测试框架而非 tracing 平台，核心实体是"用例—运行—断言结果"而非 trace/span：</p>
+<ul>
+<li><strong>promptfoo</strong>：顶层 <code>promptfooconfig.yaml</code> 包含 <code>prompts</code>（支持 <code>file://</code> 引用与 Nunjucks 模板）、<code>providers</code>（如 <code>openai:gpt-5-mini</code>，可带 temperature 等参数）、<code>tests</code>（每条含 <code>vars</code> 变量和 <code>assert</code> 断言数组）、<code>defaultTest</code>（全体用例共享的 vars/assert）。一次 eval 生成 <strong>providers × prompts × tests 的笛卡尔积</strong>（2 prompts × 2 providers × 2 tests = 8 个结果格子）；vars 为数组时进一步展开组合。断言对象字段：<code>type</code>、<code>value</code>、<code>threshold</code>、<code>weight</code>（默认 1.0）、<code>metric</code>（命名指标标签，用于聚合报表）。用例总分 = 各断言分的加权平均，测试级 <code>threshold</code> 决定 pass/fail。结果持久化在 SQLite（<code>promptfoo.db</code>）中，按 eval run 组织。</li>
+<li><strong>DeepEval</strong>：原子单位是 <code>LLMTestCase</code>（字段：<code>input</code>、<code>actual_output</code>、<code>expected_output</code>、<code>retrieval_context</code>），多轮对话有 ConversationalTestCase；数据集侧实体是 <strong>Golden</strong>（单轮 = input + 期望输出；conversational golden 定义场景与期望结局），聚合为 EvaluationDataset。每个 Metric 输出 <strong>0–1 的 score + reason 文本</strong>，<code>threshold</code>（默认 0.5）决定 <code>is_successful()</code>；trace/span 级实体依赖 Confident AI 平台（组件级评测通过 tracing 挂 golden + metrics）。</li>
+</ul>
+<h4 id="_71">核心功能清单</h4>
+<ul>
+<li><strong>trace 视图</strong>：promptfoo 无独立 trace 视图，但断言体系含 <code>trace-span-count</code>、<code>trajectory:tool-used</code> 等 tracing/轨迹断言（细节未核实）；DeepEval 开源库本身无，trace 观测在 Confident AI 云端。</li>
+<li><strong>会话/线程</strong>：promptfoo 无；DeepEval 有多轮对话测试用例与 Conversation Simulator（由 conversational golden 生成真实多轮交互）。</li>
+<li><strong>playground</strong>：promptfoo web viewer 提供 "Edit and re-run"（在 eval creator 中改配置重跑）；DeepEval 无。</li>
+<li><strong>prompt 管理</strong>：promptfoo 以文件/YAML 管理 prompt（版本随 git）；DeepEval 开源库无（云端有）。</li>
+<li><strong>数据集</strong>：promptfoo 的 tests 可从 CSV/Google Sheets/脚本加载；DeepEval 有一等公民的 EvaluationDataset + <strong>Synthesizer 合成器</strong>（从文档 &gt; 已有 goldens &gt; 从零，三种来源按可靠性排序）。</li>
+<li><strong>实验对比</strong>：promptfoo web viewer 有 Eval selector 和 <strong>Compare 功能对两次 eval 做 diff</strong>（绿=新增、红=移除）；DeepEval 的跨 run 趋势对比在 Confident AI。</li>
+<li><strong>评测</strong>：两者核心。promptfoo 约 40 种断言类型；DeepEval 有 G-Eval、DAG、RAG 四件套（Faithfulness/Answer Relevancy/Contextual Precision/Recall）、Agent 指标（Task Completion、Tool Correctness、Step Efficiency、Plan Adherence）、安全指标（Bias/Toxicity/PIILeakage）等。</li>
+<li><strong>标注/人工反馈</strong>：两者开源部分均无标注队列；Synthesizer 文档仅建议人工"review, edit, enrich"合成数据。</li>
+<li><strong>监控告警</strong>：promptfoo 开源版无；DeepEval 无（生产监控归 Confident AI）。</li>
+<li><strong>成本核算</strong>：promptfoo 有 <code>cost</code> 和 <code>latency</code> 断言类型（可直接对成本/延迟设门禁）；DeepEval 开源库无成本核算。</li>
+<li><strong>红队</strong>：promptfoo 有完整 red team 子系统（<code>promptfoo redteam run</code> 漏洞扫描）；DeepEval 的安全测试以指标形式提供（红队能力在其姊妹项目，未核实）。</li>
+</ul>
+<h4 id="_72">接入与实现方式</h4>
+<ul>
+<li><strong>promptfoo</strong>：不侵入被测应用——它是<strong>外部驱动器</strong>，按矩阵主动调用 provider（HTTP API、自定义 JS/Python provider、可执行文件均可作为 provider，因此 Go 服务可用 HTTP provider 接入）。npx/npm/brew/pip 安装，Node ^20.20.0 或 &gt;=22.22.0。断言中 <code>javascript</code>/<code>python</code>/<code>webhook</code> 类型允许任意自定义校验逻辑。与 OTel 的关系：存在 trace 相关断言，说明可消费 tracing 数据，机制未核实。</li>
+<li><strong>DeepEval</strong>：Python 3.9+，pip 安装。接入即写 pytest 测试文件：<code>assert_test(test_case, metrics)</code> 或 <code>assert_test(golden, metrics)</code>（后者走 tracing 路径，配合 <code>@observe</code> 类组件埋点做 component-level eval）。判官模型可换：OpenAI/Azure/Ollama/Gemini 或继承 <code>DeepEvalBaseLLM</code> 自定义。与 OTel 无直接绑定；有 LangChain/CrewAI/OpenAI 等框架集成。</li>
+</ul>
+<h4 id="_73">自托管与后端架构</h4>
+<ul>
+<li><strong>promptfoo</strong>：架构极简——单个 <strong>Express server 同时提供 Web UI 和 API</strong>，存储用 <strong>SQLite</strong>（默认 <code>/home/promptfoo/.promptfoo/promptfoo.db</code>）+ 文件系统存大媒体（图片等外置为引用而非 base64）。无队列、无独立数据库服务。部署：ghcr.io/promptfoo/promptfoo:latest 镜像 + volume、docker-compose、实验性 Helm chart（PVC 持久化）。CLI 通过 <code>promptfoo share</code> 把本地 eval 结果上传到自托管实例。缓存层：磁盘缓存 <code>~/.promptfoo/cache</code>（cache-manager + keyv），只缓存成功响应，默认 TTL 14 天，<code>--no-cache</code>/<code>PROMPTFOO_CACHE_ENABLED=false</code> 可关。MIT。</li>
+<li><strong>DeepEval</strong>：开源部分是<strong>纯 Python 库，无服务端可自托管</strong>；结果查看、趋势、tracing 依赖 Confident AI SaaS（<code>CONFIDENT_API_KEY</code> 可选，不配则完全本地跑）。Apache 2.0。</li>
+</ul>
+<h4 id="hitl_11">人工介入与 HITL</h4>
+<p>两者开源版均<strong>无断点/状态编辑/审批流</strong>。promptfoo web viewer 的 "Edit and re-run" 只是配置级人工迭代；DeepEval 的 HITL 仅体现为"合成 goldens 需人工审核后入库"的流程建议，标注队列在 Confident AI 云端。对 HITL 需求，这两家都不是参照对象。</p>
+<h4 id="_74">值得借鉴的点</h4>
+<ol>
+<li><strong>断言即数据的类型体系</strong>：promptfoo 用统一的 <code>{type, value, threshold, weight, metric}</code> 五字段建模所有断言，确定性断言（equals/contains/regex/is-json/javascript…）与模型评分断言（llm-rubric/similar/factuality/g-eval…）共用同一 schema，且任何类型前缀 <code>not-</code> 即取反。Go 平台可直接照抄：一个 Assertion 接口 + 注册表，YAML 可声明、加权平均聚合、<code>assert-set</code> 支持分组部分通过。这让用例可序列化、可 diff、可复用（<code>assertionTemplates</code> + <code>$ref</code>）。</li>
+<li><strong>笛卡尔积用例矩阵 + defaultTest</strong>：providers × prompts × tests 的自动展开，加上 defaultTest 做公共断言/变量下沉，用极少配置生成大量对照组——对 Agent 平台就是 models × agent 配置 × 用例集的矩阵，天然支持模型/prompt A/B。</li>
+<li><strong>成功响应磁盘缓存作为 CI 加速器</strong>：以 provider+请求内容哈希为 key、只缓存成功、TTL 14 天、CI 里用 <code>PROMPTFOO_CACHE_PATH</code> 跨 run 复用。LLM 评测在 CI 的最大痛点是又贵又慢，这个设计成本极低、收益极大。</li>
+<li><strong>双门禁模式</strong>：promptfoo 走"退出码 + <code>--fail-on-error</code> + JSON/JUnit XML 输出供解析自定义阈值"；DeepEval 走"<code>deepeval test run</code> 包装 pytest，指标 threshold 不达即断言失败挂掉构建"（支持 <code>-n</code> 并行、<code>-c</code> 缓存、重试）。Go 平台建议两条都留：<code>go test</code> 原生集成（对应 DeepEval 模式）+ CLI 退出码/JUnit 输出（对应 promptfoo 模式）。</li>
+<li><strong>G-Eval 的可复现性设计</strong>：<code>criteria</code>（探索期让 LLM 自动 CoT 生成评估步骤）与 <code>evaluation_steps</code>（固化后显式指定、跳过重新生成保证跨 run 可复现）二选一，加 <code>rubric</code> 把 1–10 分限定到不重叠分数带防止"中间分聚集"，最后用 token 概率加权归一化到 0–1。做 LLM 判官指标时这三层（criteria→steps→rubric）是目前最成熟的可复现方案。</li>
+<li><strong>回归对比放在 viewer 而非引擎</strong>：promptfoo 引擎只管产出结构化 eval run（SQLite），基线回归靠 web viewer 的 Compare 两次 run 做 diff（绿增红减）+ <code>--tag key=value</code> 打 git SHA/CI run ID 关联流水线上下文。把"基线"实现为"任选两次 run 的 diff + 标签检索"比维护专门的 baseline 状态机简单得多，值得作为 V1 方案。</li>
+</ol>
+<blockquote>
+<p><strong>⚠️ 核验修正</strong>（独立核查代理逐条反驳后订正）：</p>
+<ul>
+<li><strong>订正</strong>：原稿关键事实「10. G-Eval criteria 与 evaluation_steps 二选一（criteria 经 CoT 生成 steps，显式 steps 可复现）；先生成 1–10 分再用 token 概率加权归一化为 0–1；rubric 分数区间不重叠。deepeval test run 包装 pytest，-n 并行、-c 缓存，指标不达 threshold 即挂掉构建；无 CONFIDENT_API_KEY 则完全本地运行」经核查有误。两处问题。(a) 分数范围错误：所引页面明确是让 LLM "generate a score between 1–5, where 5 is better than 1"，再用输出 token 概率加权求和归一化到 0–1——是 1–5 而非 1–10（1–10 可能与 rubric 的 score_range "0 - 10, inclusive" 混淆了；rubric 区间不重叠、criteria/evaluation_steps 二选一、CoT 自动生成、显式 steps 提升可复现性均获该页支持）。来源：https://raw.githubusercontent.com/confident-ai/deepeval/main/docs/content/docs/%28custom%29/metrics-llm-evals.mdx 。(b) 来源张冠李戴：deepeval test run/-n/-c/CONFIDENT_API_KEY 等内容完全不在所引页面；这些事实本身成立，但正确来源是 docs/content/docs/command-line-interface.mdx（"run evaluation test files through pytest with the deepeval pytest plugin enabled"）、docs/content/docs/evaluation-flags-and-configs.mdx（-n 并行、-c 读本地缓存）及 README（本地运行、Confident AI 登录可选）。</li>
+</ul>
+</blockquote>
+<h3 id="213-datadog-llm-observability-new-relic-ai-monitoring">2.13 Datadog LLM Observability + New Relic AI Monitoring</h3>
+<p><strong>类别</strong>：APM（企业级应用性能监控厂商的 LLM/Agent 观测产品）</p>
+<h4 id="_75">定位与设计理念</h4>
+<p>两者都是「把 LLM/Agent 观测长在既有 APM 体系上」的代表。Datadog LLM Observability（文档中已逐步更名为 Agent Observability）定位为"监控、排障、评估 LLM 应用"的一站式产品：以 trace 为单位记录每次请求，覆盖单次推理、静态 workflow、动态 agent 三个复杂度层级，并叠加成本/延迟运营监控、质量评估（Patterns 主题聚类）、安全扫描（敏感数据脱敏、prompt injection 检测）、异常检测（Insights）。核心取舍：不做独立系统，复用 ddtrace APM tracer 和 Datadog 平台（告警、Dashboard、Sensitive Data Scanner），一句话哲学是"LLM 观测只是 APM 的一种新 span 语义"。New Relic AI Monitoring 更极致：它直接是"APM for AI"——不发新 SDK，而是给现有各语言 APM agent 加开关，捕获 LLM 事件并与分布式追踪关联；关闭 distributed tracing 或开启 high security mode 时 AI 数据即停止采集，说明它完全寄生于 APM 管道。</p>
+<h4 id="_76">数据模型</h4>
+<p>Datadog：三个核心实体——Span（一个操作单元，含 name、时间戳、duration、error、input/output、metadata、metrics、tags）、Trace（一次请求，由嵌套 span 组成，root span 界定起止）、Evaluation（质量检查结果，挂在 span/trace/session 上）。七种 span kind：<code>llm</code>（模型调用）、<code>workflow</code>（静态编排）、<code>agent</code>（LLM 动态决定执行路径）、<code>tool</code>、<code>task</code>（无外部调用的内部步骤）、<code>embedding</code>、<code>retrieval</code>（向量库检索）；层级规则明确：只有 llm/workflow/agent 可作 root，tool/task/embedding/retrieval 只能是子 span。会话用 <code>session_id</code> 参数串联（大多数装饰器都接受）。Evaluation 有 label + metric_type（categorical/score/boolean/json）+ value，可按 span_id 精确关联，也可用 <code>span_with_tag_value</code> 按 tag 关联。成本经 metrics（input_tokens/output_tokens）与 <code>cost_tags</code> 传播。New Relic：以事件（NRDB event）为模型，如 LlmEmbedding、LlmChatCompletionMessage（有 <code>set_llm_token_count_callback</code> API 为其补 token_count），Agent 监控中 agent 与 tool 被建模为实体地图（entity map）里的一等实体节点，工具调用与 agent 间移交（handoff）是有向边。</p>
+<h4 id="_77">核心功能清单</h4>
+<p>Datadog：trace 视图——有（端到端瀑布 + agent 执行可视化：工具选择、任务移交给哪个 agent）；会话/线程——有（session_id，反馈可挂到 session）；playground——本次打开的文档未见，未核实；prompt 管理——未见专门功能，无；数据集——有（可版本化的 Datasets）；实验对比——有（Experiments，跨 accuracy/correctness/duration/estimated cost 等约 9 个字段对比，gov 站点不可用）；评测——有（Managed 评估目前仅 Language Mismatch + 敏感数据扫描；幻觉/Failure to Answer/Sentiment/Toxicity/Prompt Injection/Topic Relevancy/Tool Selection/Tool Argument Correctness/Goal Completeness 共 9 个是 LLM-as-judge 模板，由用户接入的 OpenAI/Azure OpenAI/Anthropic/Bedrock/Vertex AI 运行；另支持外部评估经 API 提交、Export API 导出 span 离线评估）；标注/人工反馈——部分有（End-User Feedback API 收集评分/评论，无标注队列）；监控告警——有（复用 Datadog 监控体系）；成本核算——有（token 指标、cost_tags、实验的 estimated cost）。New Relic：trace 视图——有（AI Responses 页 + trace waterfall，agent/tool span 内嵌）；会话——文档未见独立会话实体，未核实；playground/prompt 管理/数据集/实验——无；评测——无内置 LLM-as-judge（有模型对比 Model Comparison）；人工反馈——有（用户正/负反馈关联 API）；监控告警——有（复用 NR 告警）；成本核算——有（token 用量到 agent 粒度、跨模型成本对比）。</p>
+<h4 id="_78">接入与实现方式</h4>
+<p>Datadog 三条路：1) LLMObs SDK（Python 3.7+/Node.js 16+/Java 8+），Python 侧提供 <code>@llm(model_name, model_provider)</code>、<code>@workflow</code>、<code>@agent</code>、<code>@tool</code>、<code>@task</code>、<code>@embedding</code>、<code>@retrieval</code> 装饰器（均可带 name/session_id/ml_app），<code>LLMObs.annotate()</code> 补 input/output/metadata/metrics/tags；开启方式 <code>ddtrace-run</code> + <code>DD_LLMOBS_ENABLED=1</code>/<code>DD_LLMOBS_ML_APP</code>，或 <code>LLMObs.enable()</code>；支持 agentless 模式（<code>DD_LLMOBS_AGENTLESS_ENABLED</code> + API key 直发，无需本机 Datadog Agent）。SDK 底层就是 ddtrace APM tracer，对 OpenAI/LangChain/Bedrock/Anthropic 等有零代码 auto-instrumentation。2) HTTP intake API：Spans API 与 Evaluations API 直接 POST，供无 SDK 语言（如 Go）使用，可提交完整 trace 层级。3) OTel：原生支持 GenAI 语义约定 v1.37+，OTLP 直发（header 里 <code>dd-api-key</code> + <code>dd-otlp-source=llmobs</code>），旧框架需 <code>OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental</code>；按 <code>gen_ai.operation.name</code> 映射 span kind（chat/completion→llm，embeddings→embedding，execute_tool→tool，invoke_agent/create_agent→agent，其余→workflow），<code>gen_ai.usage.input_tokens</code> 等自动映射。New Relic：无独立 SDK，就是各语言 APM agent 里加 <code>ai_monitoring</code> 能力：Go 3.31.0+（go-openai 1.19.4+、AWS SDK v2）、Java 8.12.0+、.NET 10.23.0+、Node 11.13.0+、Python 9.8.0+（OpenAI/Boto3/LangChain 0.1.0+/LangGraph 1.0.7+/Google GenAI/FastMCP）、Ruby 9.8.0+；agent 框架层对 LangGraph、Strands、AutoGen 自动埋点；另有 OpenLIT（OTel）接入路线。</p>
+<h4 id="_79">自托管与后端架构</h4>
+<p>两家均为纯 SaaS，闭源商业产品，无自托管后端。Datadog 数据路径：SDK →（本机 Datadog Agent 或 agentless 直发）→ 指定 DD_SITE；部分功能（Experiments）在政府云站点不可用；后端存储/队列选型不公开，未核实。New Relic 数据经 APM agent 上报云端（事件存储即其 NRDB，本次打开页面未直接确认，未核实）；提供 drop filters 在数据出境前丢弃敏感字段。对自托管有硬需求的团队，这两家只能作为"设计参考"而非"直接复用"。</p>
+<h4 id="hitl_12">人工介入与 HITL</h4>
+<p>两家都没有执行期 HITL：无断点、无状态编辑、无审批流。Datadog 有事后人工通道：End-User Feedback（评分/评论挂 span/trace/session）+ 外部评估 API + Export API 导出人工复核；配置评估需 "Agent Observability Write" 权限（有权限分层）。New Relic 仅有用户反馈（正/负）关联 API。均无标注队列。</p>
+<h4 id="_80">值得借鉴的点</h4>
+<ol>
+<li>抄 span kind 枚举与 root 约束：<code>llm/workflow/agent/tool/task/embedding/retrieval</code> 七分类 + "只有 llm/workflow/agent 可为 root"的校验规则，是目前业界最清晰的 agent trace 语义模型，Go 平台可直接在 trace schema 层实现同样的 kind 字段和层级校验，UI 按 kind 着色/过滤。</li>
+<li>对齐 OTel GenAI semconv v1.37+ 并做双向映射：Datadog 用 <code>gen_ai.operation.name</code> → span kind 的映射表证明"自有模型 + OTel 兼容层"可共存；trpc-agent-go 已有 OTel 输出，做一张同样的映射表就能同时兼容自有 UI 和第三方后端。</li>
+<li>评估结果与 span 的松耦合关联：<code>submit_evaluation(label, metric_type∈{categorical,score,boolean,json}, value, span 或 span_with_tag_value)</code>——支持"按 tag 关联"意味着离线评估作业不必在执行期持有 span_id，这对异步/批量评测管道极其实用。</li>
+<li>把"托管评估"拆成模板：Datadog 把幻觉/毒性等做成 9 个 LLM-as-judge 模板 + 用户自带 judge 模型的 provider 连接，平台方不养推理集群、不碰用户密钥边界，架构上很轻，适合小团队照抄。</li>
+<li>agentless 双模上报：同一 SDK 支持"经本机 Agent"与"直发云端"两种链路（一个环境变量切换），Go 平台可对应设计"经 sidecar/collector"与"SDK 直连"双模，降低接入门槛。</li>
+<li>New Relic 的启示：把 agent/tool 建成实体地图中的一等实体（节点=agent/模型/工具，边=调用与移交），并让 AI 数据严格复用分布式追踪管道（tracing 关了 AI 数据就没了）——对已有微服务追踪的企业，这种"零新增基础设施"叙事是最强卖点，也是 Go 生态平台该讲的故事。</li>
+</ol>
+<blockquote>
+<p><strong>⚠️ 核验修正</strong>（独立核查代理逐条反驳后订正）：</p>
+<ul>
+<li><strong>订正</strong>：原稿关键事实「两家均为闭源纯 SaaS 无自托管后端；Datadog 提供 End-User Feedback 与外部评估 API 但无标注队列/断点等执行期 HITL；New Relic 提供 drop filters 在上报前丢弃敏感数据」经核查有误。『无标注队列』一说错误：Datadog LLM Observability 现已提供 Annotation Queues——'Annotation Queues provide a structured workflow for (systematic) human review of LLM traces'，支持结构化标签、自由备注、经 Automation Rules 自动路由，可用于构建基准数据集（https://docs.datadoghq.com/llm_observability/evaluations/annotation_queues/，evaluations 首页与侧边导航均列出）。正确说法应为：Datadog 有事后人工标注队列，但无执行期断点/干预类 HITL。另一处措辞不精确：New Relic drop filters 是在数据到达 New Relic ingest pipeline 后、写入 NRDB 前丢弃（'evaluate data forwarded by the agent within the data ingest pipeline'），并非在客户端上报前丢弃（https://docs.newrelic.com/docs/ai-monitoring/drop-sensitive-data/）。闭源纯 SaaS、End-User Feedback、External Evaluations API、drop filters 存在性本身均属实。</li>
+</ul>
+</blockquote>
+<h2 id="3">3. 横向能力矩阵</h2>
+<blockquote>
+<p>✅ 完整支持 · ◐ 部分/受限（说明见括注或工具档案）· — 不支持 · <strong>P0/P1/P2</strong> = 本平台路线图阶段（见 §5）。列按"全生命周期平台 → 网关 → 调试器 → 测试框架 → APM"排列；AgentOps/Laminar/Lunary、PromptLayer、New Relic 等见 §2 档案，未入矩阵。</p>
+</blockquote>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>能力</th>
+<th>LangSmith</th>
+<th>Langfuse</th>
+<th>Phoenix</th>
+<th>Weave</th>
+<th>Braintrust</th>
+<th>Opik</th>
+<th>Helicone</th>
+<th>LangGraph Studio</th>
+<th>promptfoo</th>
+<th>Datadog LLMObs</th>
+<th><strong>本平台 testplatform</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开源</td>
+<td>—（闭源商业）</td>
+<td>✅ MIT 核心（部分 EE）</td>
+<td>✅ ELv2</td>
+<td>◐ SDK Apache-2.0，服务端闭源</td>
+<td>◐ autoevals/proxy MIT，平台闭源</td>
+<td>✅ Apache-2.0</td>
+<td>✅</td>
+<td>◐ dev server 开源，UI 免费闭源</td>
+<td>✅ MIT</td>
+<td>—</td>
+<td>✅（本仓库内）</td>
+</tr>
+<tr>
+<td>自托管</td>
+<td>◐ 企业版付费</td>
+<td>✅</td>
+<td>✅ 单容器起步</td>
+<td>◐ 企业版</td>
+<td>◐ hybrid（数据面进客户 VPC）</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅ 本地 dev</td>
+<td>✅ CLI 本地</td>
+<td>—</td>
+<td>✅ 单二进制</td>
+</tr>
+<tr>
+<td>Trace 树/链路视图</td>
+<td>✅ Run 树</td>
+<td>✅ observations</td>
+<td>✅ OTel 原生</td>
+<td>✅ calls</td>
+<td>✅</td>
+<td>✅</td>
+<td>◐ 请求级+Session 层级</td>
+<td>✅ 图视角</td>
+<td>—</td>
+<td>✅ 七种 span kind</td>
+<td>✅ agent/model/tool</td>
+</tr>
+<tr>
+<td>会话/线程维度</td>
+<td>✅ Threads</td>
+<td>✅ Sessions</td>
+<td>✅ Sessions</td>
+<td>◐ Threads</td>
+<td>◐</td>
+<td>✅ Threads</td>
+<td>✅ Sessions</td>
+<td>✅ Threads</td>
+<td>—</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><strong>上下文拼接来源归因</strong></td>
+<td>◐ 仅展示最终 prompt</td>
+<td>◐</td>
+<td>◐</td>
+<td>◐</td>
+<td>◐</td>
+<td>◐</td>
+<td>◐</td>
+<td>◐ 状态可见</td>
+<td>—</td>
+<td>◐</td>
+<td>✅ <strong>独有</strong>（逐条消息溯源+拼接条件）</td>
+</tr>
+<tr>
+<td>Playground</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>◐</td>
+<td>✅（即运行图）</td>
+<td>◐ viewer</td>
+<td>—</td>
+<td>✅ 调试台</td>
+</tr>
+<tr>
+<td>Prompt 管理/版本化</td>
+<td>✅ Hub+commit</td>
+<td>✅ labels+缓存</td>
+<td>✅</td>
+<td>◐ objects 版本化</td>
+<td>✅ functions</td>
+<td>✅</td>
+<td>✅</td>
+<td>—</td>
+<td>◐ YAML 即版本</td>
+<td>◐</td>
+<td>◐ instruction 热更 → <strong>P1 版本化</strong></td>
+</tr>
+<tr>
+<td>数据集</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅ 版本化</td>
+<td>✅</td>
+<td>✅</td>
+<td>◐</td>
+<td>—</td>
+<td>✅ YAML 矩阵</td>
+<td>◐</td>
+<td>✅ 测试用例</td>
+</tr>
+<tr>
+<td>实验对比/回归</td>
+<td>✅ experiments</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅ <strong>核心定位</strong></td>
+<td>✅</td>
+<td>◐</td>
+<td>—</td>
+<td>✅ 矩阵+CI</td>
+<td>◐</td>
+<td>◐ 批量运行 → <strong>P0 对比视图</strong></td>
+</tr>
+<tr>
+<td>代码断言/规则评测</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅ scorers</td>
+<td>✅</td>
+<td>✅</td>
+<td>◐</td>
+<td>—</td>
+<td>✅ <strong>断言体系最全</strong></td>
+<td>✅</td>
+<td>✅ 8 种断言</td>
+</tr>
+<tr>
+<td>LLM-as-judge</td>
+<td>✅ 在线+离线</td>
+<td>✅</td>
+<td>✅ evals 库</td>
+<td>✅</td>
+<td>✅ autoevals</td>
+<td>✅ G-Eval</td>
+<td>◐</td>
+<td>—</td>
+<td>✅ rubric</td>
+<td>✅ 在线质量检查</td>
+<td>— → <strong>P1</strong></td>
+</tr>
+<tr>
+<td>标注队列/人工评审</td>
+<td>✅ 最完整（预留锁/多审/pairwise）</td>
+<td>✅</td>
+<td>◐</td>
+<td>◐</td>
+<td>✅</td>
+<td>✅</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>✅</td>
+<td>— → <strong>P1 简版</strong></td>
+</tr>
+<tr>
+<td>终端用户反馈 API</td>
+<td>✅</td>
+<td>✅</td>
+<td>◐</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅ scores</td>
+<td>—</td>
+<td>—</td>
+<td>✅</td>
+<td>— → <strong>P1</strong></td>
+</tr>
+<tr>
+<td>监控告警</td>
+<td>✅ 阈值+多渠道</td>
+<td>◐</td>
+<td>—</td>
+<td>◐ monitors</td>
+<td>◐</td>
+<td>◐</td>
+<td>✅</td>
+<td>—</td>
+<td>◐ CI 即门禁</td>
+<td>✅ <strong>APM 级</strong></td>
+<td>— → <strong>P2</strong></td>
+</tr>
+<tr>
+<td>成本核算</td>
+<td>✅ 自动+自定义价格表</td>
+<td>✅</td>
+<td>◐</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅ <strong>最强（网关直采）</strong></td>
+<td>—</td>
+<td>◐</td>
+<td>✅</td>
+<td>— → <strong>P0</strong></td>
+</tr>
+<tr>
+<td>OTel/OTLP 兼容</td>
+<td>✅ ingest+gen_ai.*</td>
+<td>✅ v3 SDK 即 OTel</td>
+<td>✅ <strong>原生</strong></td>
+<td>◐</td>
+<td>✅ OTLP</td>
+<td>✅</td>
+<td>◐</td>
+<td>—</td>
+<td>—</td>
+<td>✅</td>
+<td>— → <strong>P1</strong>（框架已内建 OTel）</td>
+</tr>
+<tr>
+<td><strong>执行期断点/介入</strong></td>
+<td>—（事后标注）</td>
+<td>—</td>
+<td>—</td>
+<td>◐ guardrails 拦截</td>
+<td>—</td>
+<td>◐ guardrails</td>
+<td>◐ 网关限流/缓存</td>
+<td>✅ interrupt+状态编辑+<strong>time-travel fork</strong></td>
+<td>—</td>
+<td>—</td>
+<td>✅ <strong>模型/工具断点+上下文编辑+响应注入</strong></td>
+</tr>
+<tr>
+<td>埋点形态</td>
+<td>装饰器/包装器/OTLP</td>
+<td>装饰器/集成/OTLP</td>
+<td>OTel instrumentor</td>
+<td>装饰器</td>
+<td>Eval 框架+proxy</td>
+<td>装饰器/集成</td>
+<td><strong>网关代理</strong></td>
+<td>框架内建</td>
+<td>配置驱动</td>
+<td>SDK+auto-instr</td>
+<td><strong>框架回调</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>三个结论</strong>：
+1. 全生命周期平台（前 6 列）功能集合高度趋同——trace/playground/prompt/数据集/评测/标注六件套是"及格线"，差异在深度（LangSmith 的标注队列、Braintrust 的实验、Helicone 的成本）与商业模式（开源程度）；
+2. <strong>执行期介入是断层</strong>：只有 LangGraph Studio 一类"开发期调试器"真正做了断点与 time-travel，观测平台全部缺席——本平台的断点介入+上下文编辑处在竞争最稀疏的格子；
+3. 本平台的补强顺序（P0 成本/实验对比 → P1 LLM 评审/标注/OTLP → P2 告警）正好沿"及格线"补齐，同时守住"上下文归因 + 执行期介入"两个差异化格子。</p>
+<h2 id="4">4. 通用设计模式提炼</h2>
+<blockquote>
+<p>本节把 13 组工具中反复出现的设计收敛为可直接落地的模式。每个模式给出：它是什么、谁做得最好、实现要点、以及对本平台（testplatform）的意义。</p>
+</blockquote>
+<h3 id="1-trace-span">模式 1：统一追踪数据模型 —— trace → span 层级 + 类型枚举</h3>
+<p><strong>是什么</strong>：所有平台的地基都是同一个模型：一次端到端请求为 trace（根），内部每个操作为有类型的 span/observation，父子嵌套成树。span 类型决定 UI 渲染方式与聚合维度。</p>
+<p><strong>代表</strong>：LangSmith 的 Run tree（run_type: llm/chain/tool/retriever/prompt/parser）、Langfuse 的 trace→observations（span/generation/event 三型）、Datadog 的七种 span kind（llm/workflow/agent/tool/task/embedding/retrieval）、OTel GenAI semconv。</p>
+<p><strong>实现要点</strong>：
+- generation（LLM 调用）是特化 span：必须存<strong>全量请求消息</strong>（而非增量）、模型名、生成参数、usage、完成原因——这是 playground 复现、成本核算、上下文审计的前提；
+- 类型枚举尽量对齐 OTel GenAI / Datadog 的集合，未来互操作成本低；
+- event（时间点事件，无时长）与 span（有时长）分开建模。</p>
+<p><strong>对本平台</strong>：<code>trace.go</code> 的 Span.Kind 目前只有 agent/model/tool 三型，建议扩展 retrieval/embedding/workflow（多 Agent 编排节点），并让 <code>Detail</code> 中 generation 字段结构化（现在是 map）。</p>
+<h3 id="2session-user">模式 2：session / user 业务维度上卷</h3>
+<p><strong>是什么</strong>：trace 之上再挂两级业务维度：session（多轮对话线程）聚合多个 trace，user 聚合多个 session。成本、token、评分、错误率都能按这三级上卷。</p>
+<p><strong>代表</strong>：Langfuse sessions/users、Helicone 的 Session 层级（通过请求 header 声明 path 式层级）、LangSmith threads。</p>
+<p><strong>对本平台</strong>：已有 session 维度（会话列表/事件视图），缺 user 维度上卷和 session 级统计卡（本会话累计 token/成本/轮数）。</p>
+<h3 id="3_1">模式 3：接入方式光谱 —— 五种埋点形态的取舍</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>形态</th>
+<th>代表</th>
+<th>优点</th>
+<th>代价</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>装饰器/包装函数</td>
+<td>LangSmith <code>@traceable</code>、Weave <code>@weave.op</code>、Opik <code>@track</code></td>
+<td>粒度精确、类型友好</td>
+<td>侵入业务代码</td>
+</tr>
+<tr>
+<td>框架回调/处理器</td>
+<td>LangChain callbacks、<strong>trpc-agent-go callbacks（本平台）</strong>、OpenAI Agents SDK processors</td>
+<td>一次接入全覆盖、业务零侵入</td>
+<td>绑定框架</td>
+</tr>
+<tr>
+<td>网关/代理</td>
+<td>Helicone、Braintrust proxy、Portkey</td>
+<td>换 baseURL 即接入、跨语言</td>
+<td>只见 HTTP 层，看不到工具执行与框架内部</td>
+</tr>
+<tr>
+<td>OTel 自动埋点</td>
+<td>OpenLLMetry、OpenInference instrumentors</td>
+<td>标准化、生态复用</td>
+<td>语义粒度受库支持限制</td>
+</tr>
+<tr>
+<td>SDK 内建 tracing</td>
+<td>OpenAI Agents SDK、MLflow autolog</td>
+<td>零配置</td>
+<td>深度绑定该 SDK</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>对本平台</strong>：当前是"框架回调"形态（正确选择）。值得补：暴露 OTLP ingest（模式 4），让非 trpc-agent-go 的服务也能把 trace 打进来。</p>
+<h3 id="4otlp-ingest-genai-semconv">模式 4：OTLP 作为通用 ingest，向 GenAI semconv 对齐</h3>
+<p><strong>是什么</strong>：行业收敛趋势——自家 SDK 底层直接用 OTel 实现（Langfuse v3 SDK、Phoenix 原生、Laminar），平台同时接受任意 OTLP 数据；语义层对齐 <code>gen_ai.*</code> 属性约定。</p>
+<p><strong>好处</strong>：白嫖整个 instrumentation 生态；用户可双写多后端；换平台不换埋点。</p>
+<p><strong>对本平台</strong>：trpc-agent-go 框架本身已内建 OpenTelemetry（<code>telemetry/</code> 包）。P1 建议：collector 同时消费框架 OTel span（而不仅是回调），并提供 <code>/v1/traces</code> OTLP HTTP 端点 + gen_ai.* 属性映射，一举两得。</p>
+<h3 id="5">模式 5：存储演进路径 —— 从内存到列存</h3>
+<p><strong>是什么</strong>：几乎所有自托管平台走同一条路：dev 工具用嵌入式存储（Phoenix 默认 SQLite），起步用 Postgres，规模化后把 trace 明细迁到 ClickHouse（列存+高压缩，聚合查询快百倍），大 payload（截图/长上下文）进 S3/blob，摄取走 Redis/队列异步批量写。</p>
+<p><strong>代表</strong>：Langfuse v3（Postgres 元数据 + ClickHouse 明细 + Redis 队列 + S3 blob + worker 进程）、LangSmith 自托管（Postgres + ClickHouse + Redis）、Opik（MySQL + ClickHouse）、Braintrust（自研 Brainstore）。</p>
+<p><strong>对本平台</strong>：当前内存 ring（重启即失）。P0 先落 SQLite（单文件、零依赖，Go 用 modernc.org/sqlite 免 CGO）；接口抽成 <code>TraceStore</code> interface，将来平滑换 Postgres/ClickHouse。<strong>不要直接上 ClickHouse</strong>——那是日均百万 trace 的问题。</p>
+<h3 id="6">模式 6：异步摄取管道</h3>
+<p><strong>是什么</strong>：SDK 端批量缓冲 + 后台线程发送（不阻塞业务请求）；服务端 API 先落队列、worker 异步入库；写入幂等（event id 去重）。</p>
+<p><strong>对本平台</strong>：单机场景可以简化，但落库改为异步批量（channel + 定时 flush）值得现在就做，避免 UI 查询与写入互相拖累。</p>
+<h3 id="7prompt">模式 7：Prompt 管理闭环</h3>
+<p><strong>是什么</strong>：prompt registry（版本化存储）+ 部署标签（production/staging 指针）+ playground 编辑调试 + 从线上 trace 一键"在 playground 中打开"复现。改 prompt 不用改代码、不用重新部署。</p>
+<p><strong>代表</strong>：Langfuse Prompt Management（版本 + labels + 客户端缓存）、LangSmith Prompt Hub + Playground、PromptLayer（把 prompt 当 CMS 管理，含审批流）、Braintrust prompts-as-functions。</p>
+<p><strong>对本平台</strong>：设置页的 Instruction 热更新是雏形。P1 建议：instruction/prompt 版本表（谁、何时、改了什么、diff），运行记录关联 prompt 版本——"这次跑得差是因为哪次 prompt 改动"是最高频的排查需求。</p>
+<h3 id="8-">模式 8：数据集-实验闭环（回归测试的工业形态）</h3>
+<p><strong>是什么</strong>：生产 trace 一键入数据集 → 数据集跑实验（新 prompt/新模型/新代码）→ 与 baseline 逐条 diff + 汇总指标对比 → CI 门禁（分数低于基线则 fail）。核心实体：dataset / dataset_item（input+expected）/ experiment / experiment_item（output+scores）。</p>
+<p><strong>代表</strong>：Braintrust（Eval 三要素 data/task/scores，整个产品围绕此构建）、LangSmith experiments、promptfoo（YAML 声明 providers×prompts×tests 矩阵）、Langfuse datasets。</p>
+<p><strong>对本平台</strong>：测试用例模块已是雏形（用例=dataset_item，批量运行=experiment）。缺的是<strong>实验对比视图</strong>（两次批量运行逐用例 diff）和<strong>从 trace 一键生成用例</strong>。这两个是 P0 价值最高的功能。</p>
+<h3 id="9-llm">模式 9：评测三层次 —— 代码断言 / LLM 评审 / 人工标注</h3>
+<p><strong>是什么</strong>：成熟平台都是三层并存，统一落到 score 实体（可挂 trace/span/session，含 name/value/source/comment）：
+1. <strong>代码断言</strong>：contains/regex/JSON schema/工具调用检查——快、确定、免费（promptfoo 的断言类型体系最完整，值得整体参照）；
+2. <strong>LLM-as-judge</strong>：离线批量（实验评分）+ 在线抽样（生产质量监控，如幻觉/相关性/毒性）；prompt 模板 + 结构化输出分数（Langfuse、LangSmith、Datadog quality checks）；
+3. <strong>人工</strong>：标注队列（把 trace 分配给人打分，LangSmith annotation queues）+ 终端用户反馈 API（👍👎，Weave feedback）。</p>
+<p><strong>对本平台</strong>：第 1 层已有 8 种断言。P1 加 <code>llm_judge</code> 断言类型（用被测模型或独立评审模型 + 评分 rubric）；score 独立建模而不是只有 pass/fail。</p>
+<h3 id="10hitl">模式 10：HITL —— 断点、状态编辑、时间旅行</h3>
+<p><strong>是什么</strong>：开发期调试的最高形态：任意步骤挂起（interrupt/breakpoint）→ 检查并<strong>编辑状态</strong>→ 放行；以及 time-travel——从历史执行的任意 checkpoint fork 出新分支重放。</p>
+<p><strong>代表</strong>：LangGraph interrupt + Studio（图可视化、thread state 编辑、从任意节点 fork）、ADK web（事件/状态检查）。生产观测平台（Langfuse 等）反而普遍<strong>没有</strong>这能力——这是 dev-tool 与生产观测的分界线。</p>
+<p><strong>对本平台</strong>：断点介入（改上下文/改参数/注入响应）已达到 Studio 同级的"当前点介入"。差 time-travel：需要把每次模型调用前的完整上下文当 checkpoint 存（已经存了！<code>Detail["messages"]</code>），加"从此步重放"按钮——用存档上下文直接重发模型即可，这是低成本高杀伤力的 P1 功能。</p>
+<h3 id="11_1">模式 11：成本核算</h3>
+<p><strong>是什么</strong>：usage（prompt/completion/cache tokens）× 价格表（model→单价，含缓存读写差价）→ 每 generation 算成本 → 按 trace/session/user/feature 上卷 → 仪表盘与告警。</p>
+<p><strong>代表</strong>：Helicone/Langfuse/LangSmith 全都内建；OpenRouter 式价格表往往直接开源可抄。</p>
+<p><strong>对本平台</strong>：usage 已采集。P0 加价格表（JSON 可配）+ run/session 级成本展示。</p>
+<h3 id="12">模式 12：内容捕获开关与隐私</h3>
+<p><strong>是什么</strong>：prompt/completion 属于敏感数据。标准做法：内容捕获总开关（OTel GenAI 约定 content 默认<strong>不</strong>采集）、脱敏 hook（正则/自定义函数处理 PII）、超长 payload 截断并转存 blob。</p>
+<p><strong>对本平台</strong>：内网测试平台可默认全采，但接生产流量前需要此开关；架构上在 collector 入口留一个 <code>Sanitizer func(msg) msg</code> 钩子即可。</p>
+<h3 id="13">模式 13：在线监控与告警</h3>
+<p><strong>是什么</strong>：错误率、p95 延迟、成本突增、评测分数下滑 → 阈值告警 → 通知渠道（邮件/webhook/Slack）。生产观测平台标配，纯 dev 工具（Phoenix 单机、Studio）可无。</p>
+<p><strong>对本平台</strong>：P2。测试平台阶段用"批量回归失败即 CI 报警"替代即可。</p>
+<hr />
+<h2 id="5-testplatform">5. 对 testplatform 的落地路线图</h2>
+<blockquote>
+<p>原则：先补"数据资产化"（持久化、成本、实验对比），再补"评测深度"（LLM 评审、标注），最后补"标准对齐"（OTLP）。每项标注参考对象与落地位置。</p>
+</blockquote>
+<h3 id="p0">P0（当前迭代就值得做）</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>事项</th>
+<th>参考对象</th>
+<th>落地位置与要点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>trace 持久化（SQLite）</td>
+<td>Phoenix 的嵌入式起步路线</td>
+<td><code>internal/platform/trace.go</code> 抽 <code>TraceStore</code> 接口，加 sqlite 实现（modernc.org/sqlite 免 CGO）；异步批量写</td>
+</tr>
+<tr>
+<td>成本核算</td>
+<td>Langfuse/Helicone 价格表</td>
+<td>价格表 JSON（model→输入/输出/缓存单价），AfterModel 里算 cost，Run/Session 上卷，UI 加成本列</td>
+</tr>
+<tr>
+<td>实验对比视图</td>
+<td>Braintrust experiments、promptfoo viewer</td>
+<td>两次批量测试（TestRun）逐用例并排 diff：输出、断言、耗时、token；汇总胜负表</td>
+</tr>
+<tr>
+<td>从 trace 一键生成用例</td>
+<td>LangSmith "add to dataset"</td>
+<td>链路页加按钮：run 的 input+输出断言草稿 → 预填用例编辑器</td>
+</tr>
+<tr>
+<td>session 级统计</td>
+<td>Langfuse sessions</td>
+<td>会话列表加累计 token/成本/轮数/平均延迟</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="p1">P1（下个阶段）</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>事项</th>
+<th>参考对象</th>
+<th>落地位置与要点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LLM-as-judge 断言</td>
+<td>Langfuse evals、promptfoo llm-rubric</td>
+<td>断言类型加 <code>llm_judge{rubric, judge_model}</code>；评审模型可独立配置；分数落 score 实体</td>
+</tr>
+<tr>
+<td>score 实体化</td>
+<td>Langfuse scores</td>
+<td>独立 score 表（name/value/source: code</td>
+</tr>
+<tr>
+<td>单步重放（time-travel）</td>
+<td>LangGraph Studio fork</td>
+<td>模型 span 已存完整上下文；加"从此步重放"：用（可编辑后的）存档上下文直接调当前模型，生成新 run 并与原 run 关联</td>
+</tr>
+<tr>
+<td>prompt 版本化</td>
+<td>Langfuse prompt management</td>
+<td>instruction 每次修改存版本+diff；run 记录关联 prompt 版本</td>
+</tr>
+<tr>
+<td>OTLP ingest + gen_ai.* 对齐</td>
+<td>Langfuse v3、Phoenix</td>
+<td>消费框架内建 OTel span；<code>/v1/traces</code> HTTP 端点；span 属性映射到现有 Span 模型</td>
+</tr>
+<tr>
+<td>标注队列（简版）</td>
+<td>LangSmith annotation queues</td>
+<td>把选中 run 加入队列，标注页逐条打分/评语 → score</td>
+</tr>
+<tr>
+<td>终端用户反馈 API</td>
+<td>Weave feedback</td>
+<td><code>POST /api/runs/{id}/feedback</code>（👍👎+评语），落 score</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="p2">P2（规模化再说）</h3>
+<ul>
+<li>Postgres/ClickHouse 存储后端（数据量到十万级 trace 再动手）</li>
+<li>在线抽样评估 + 告警（错误率/成本/分数阈值 → webhook）</li>
+<li>多项目/多环境隔离与 RBAC</li>
+<li>内容脱敏钩子与采集开关（接生产流量的前提）</li>
+<li>trace 导出（OTLP 转发到 Langfuse/Datadog 等，做"薄前端厚生态"）</li>
+</ul>
+<h3 id="_81">刻意不做（当前定位下）</h3>
+<ul>
+<li>自研 ClickHouse 级摄取管道（单团队测试平台用不上，见模式 5）</li>
+<li>通用 prompt CMS/审批流（PromptLayer 的主场，超出测试平台边界）</li>
+<li>Gemini Live 式音视频调试（框架尚无此场景）</li>
+</ul>
+<h2 id="6_1">6. 参考资料</h2>
+<p><strong>LangSmith (LangChain)</strong>
+- <a href="https://docs.langchain.com/langsmith/run-data-format">https://docs.langchain.com/langsmith/run-data-format</a>
+- <a href="https://docs.langchain.com/langsmith/observability-concepts">https://docs.langchain.com/langsmith/observability-concepts</a>
+- <a href="https://docs.langchain.com/langsmith/annotate-code">https://docs.langchain.com/langsmith/annotate-code</a>
+- <a href="https://docs.langchain.com/langsmith/trace-with-opentelemetry">https://docs.langchain.com/langsmith/trace-with-opentelemetry</a>
+- <a href="https://docs.langchain.com/langsmith/self-hosted">https://docs.langchain.com/langsmith/self-hosted</a>
+- <a href="https://docs.langchain.com/langsmith/kubernetes">https://docs.langchain.com/langsmith/kubernetes</a>
+- <a href="https://docs.langchain.com/langsmith/evaluation-concepts">https://docs.langchain.com/langsmith/evaluation-concepts</a>
+- <a href="https://docs.langchain.com/langsmith/online-evaluations-llm-as-judge">https://docs.langchain.com/langsmith/online-evaluations-llm-as-judge</a>
+- <a href="https://docs.langchain.com/langsmith/annotation-queues">https://docs.langchain.com/langsmith/annotation-queues</a>
+- <a href="https://docs.langchain.com/langsmith/dashboards">https://docs.langchain.com/langsmith/dashboards</a>
+- <a href="https://docs.langchain.com/langsmith/alerts">https://docs.langchain.com/langsmith/alerts</a>
+- <a href="https://docs.langchain.com/langsmith/cost-tracking">https://docs.langchain.com/langsmith/cost-tracking</a>
+- <a href="https://docs.langchain.com/langsmith/threads">https://docs.langchain.com/langsmith/threads</a>
+- <a href="https://docs.langchain.com/langsmith/prompt-engineering-concepts">https://docs.langchain.com/langsmith/prompt-engineering-concepts</a></p>
+<p><strong>Langfuse</strong>
+- <a href="https://langfuse.com/docs/observability/data-model（经官方文档源码仓库 github.com/langfuse/langfuse-docs main@631f861，2026-07-08 克隆，下同）">https://langfuse.com/docs/observability/data-model（经官方文档源码仓库 github.com/langfuse/langfuse-docs main@631f861，2026-07-08 克隆，下同）</a>
+- <a href="https://langfuse.com/self-hosting">https://langfuse.com/self-hosting</a>
+- <a href="https://langfuse.com/docs/evaluation/scores/data-model">https://langfuse.com/docs/evaluation/scores/data-model</a>
+- <a href="https://langfuse.com/docs/evaluation/experiments/data-model">https://langfuse.com/docs/evaluation/experiments/data-model</a>
+- <a href="https://langfuse.com/docs/prompt-management/data-model">https://langfuse.com/docs/prompt-management/data-model</a>
+- <a href="https://langfuse.com/docs/prompt-management/features/caching">https://langfuse.com/docs/prompt-management/features/caching</a>
+- <a href="https://langfuse.com/docs/prompt-management/features/playground">https://langfuse.com/docs/prompt-management/features/playground</a>
+- <a href="https://langfuse.com/docs/evaluation/evaluation-methods/annotation-queues">https://langfuse.com/docs/evaluation/evaluation-methods/annotation-queues</a>
+- <a href="https://langfuse.com/docs/evaluation/evaluation-methods/llm-as-a-judge">https://langfuse.com/docs/evaluation/evaluation-methods/llm-as-a-judge</a>
+- <a href="https://langfuse.com/docs/observability/sdk/overview">https://langfuse.com/docs/observability/sdk/overview</a>
+- <a href="https://langfuse.com/integrations/native/opentelemetry">https://langfuse.com/integrations/native/opentelemetry</a>
+- <a href="https://langfuse.com/docs/observability/features/token-and-cost-tracking">https://langfuse.com/docs/observability/features/token-and-cost-tracking</a>
+- <a href="https://langfuse.com/docs/observability/features/corrections">https://langfuse.com/docs/observability/features/corrections</a>
+- <a href="https://langfuse.com/docs/metrics/features/monitors">https://langfuse.com/docs/metrics/features/monitors</a></p>
+<p><strong>Arize Phoenix + OpenInference</strong>
+- <a href="https://github.com/Arize-ai/phoenix">https://github.com/Arize-ai/phoenix</a>
+- <a href="https://github.com/Arize-ai/openinference">https://github.com/Arize-ai/openinference</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/openinference/main/spec/semantic_conventions.md">https://raw.githubusercontent.com/Arize-ai/openinference/main/spec/semantic_conventions.md</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/self-hosting.mdx">https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/self-hosting.mdx</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/self-hosting/configuration.mdx">https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/self-hosting/configuration.mdx</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/self-hosting/license.mdx">https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/self-hosting/license.mdx</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/user-guide.mdx">https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/user-guide.mdx</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/tracing/concepts-tracing/what-are-traces.mdx">https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/tracing/concepts-tracing/what-are-traces.mdx</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/tracing/llm-traces/sessions.mdx">https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/tracing/llm-traces/sessions.mdx</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/tracing/concepts-tracing/annotations-concepts.mdx">https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/tracing/concepts-tracing/annotations-concepts.mdx</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/tracing/llm-traces/metrics.mdx">https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/tracing/llm-traces/metrics.mdx</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/tracing/how-to-tracing/cost-tracking.mdx">https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/tracing/how-to-tracing/cost-tracking.mdx</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/evaluation/llm-evals.mdx">https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/evaluation/llm-evals.mdx</a>
+- <a href="https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/evaluation/how-to-evals.mdx">https://raw.githubusercontent.com/Arize-ai/phoenix/main/docs/phoenix/evaluation/how-to-evals.mdx</a></p>
+<p><strong>W&amp;B Weave</strong>
+- <a href="https://github.com/wandb/weave">https://github.com/wandb/weave</a>
+- <a href="https://github.com/wandb/weave/tree/master/weave/trace_server">https://github.com/wandb/weave/tree/master/weave/trace_server</a>
+- <a href="https://raw.githubusercontent.com/wandb/weave/master/dev_docs/REF_SPEC.md">https://raw.githubusercontent.com/wandb/weave/master/dev_docs/REF_SPEC.md</a>
+- <a href="https://raw.githubusercontent.com/wandb/weave/master/DOCS.md">https://raw.githubusercontent.com/wandb/weave/master/DOCS.md</a>
+- <a href="https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/tracing.mdx">https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/tracing.mdx</a>
+- <a href="https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/call-schema-reference.mdx">https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/call-schema-reference.mdx</a>
+- <a href="https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/ops.mdx">https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/ops.mdx</a>
+- <a href="https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/objects.mdx">https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/objects.mdx</a>
+- <a href="https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/threads.mdx">https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/threads.mdx</a>
+- <a href="https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/feedback.mdx">https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/feedback.mdx</a>
+- <a href="https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/annotation-queues.mdx">https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/annotation-queues.mdx</a>
+- <a href="https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/costs.mdx">https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/costs.mdx</a>
+- <a href="https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/otel.mdx">https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/otel.mdx</a>
+- <a href="https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/write-ahead-log.mdx">https://raw.githubusercontent.com/wandb/docs/main/weave/guides/tracking/write-ahead-log.mdx</a></p>
+<p><strong>Braintrust</strong>
+- <a href="https://raw.githubusercontent.com/braintrustdata/autoevals/main/README.md">https://raw.githubusercontent.com/braintrustdata/autoevals/main/README.md</a>
+- <a href="https://raw.githubusercontent.com/braintrustdata/braintrust-proxy/main/README.md">https://raw.githubusercontent.com/braintrustdata/braintrust-proxy/main/README.md</a>
+- <a href="https://raw.githubusercontent.com/braintrustdata/braintrust-sdk-go/main/README.md">https://raw.githubusercontent.com/braintrustdata/braintrust-sdk-go/main/README.md</a>
+- <a href="https://raw.githubusercontent.com/braintrustdata/terraform-aws-braintrust-data-plane/main/README.md">https://raw.githubusercontent.com/braintrustdata/terraform-aws-braintrust-data-plane/main/README.md</a>
+- <a href="https://raw.githubusercontent.com/braintrustdata/terraform-aws-braintrust-data-plane/main/main.tf">https://raw.githubusercontent.com/braintrustdata/terraform-aws-braintrust-data-plane/main/main.tf</a>
+- <a href="https://raw.githubusercontent.com/braintrustdata/terraform-aws-braintrust-data-plane/main/examples/braintrust-data-plane/README.md">https://raw.githubusercontent.com/braintrustdata/terraform-aws-braintrust-data-plane/main/examples/braintrust-data-plane/README.md</a>
+- <a href="https://raw.githubusercontent.com/braintrustdata/helm/main/README.md">https://raw.githubusercontent.com/braintrustdata/helm/main/README.md</a>
+- <a href="https://www.braintrust.dev/docs/instrument">https://www.braintrust.dev/docs/instrument</a>
+- <a href="https://www.braintrust.dev/docs/core/logs">https://www.braintrust.dev/docs/core/logs</a>
+- <a href="https://www.braintrust.dev/docs/core/monitor">https://www.braintrust.dev/docs/core/monitor</a>
+- <a href="https://www.braintrust.dev/docs/annotate/human-review">https://www.braintrust.dev/docs/annotate/human-review</a>
+- <a href="https://www.braintrust.dev/docs/integrations/sdk-integrations/opentelemetry">https://www.braintrust.dev/docs/integrations/sdk-integrations/opentelemetry</a>
+- <a href="https://www.braintrust.dev/docs/reference/platform/architecture">https://www.braintrust.dev/docs/reference/platform/architecture</a>
+- <a href="https://www.braintrust.dev/docs/platform/experiments">https://www.braintrust.dev/docs/platform/experiments</a></p>
+<p><strong>Opik (Comet)</strong>
+- <a href="https://github.com/comet-ml/opik">https://github.com/comet-ml/opik</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/deployment/docker-compose/docker-compose.yaml">https://raw.githubusercontent.com/comet-ml/opik/main/deployment/docker-compose/docker-compose.yaml</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/tracing/concepts.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/tracing/concepts.mdx</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/tracing/opentelemetry/overview.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/tracing/opentelemetry/overview.mdx</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/tracing/cost_tracking.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/tracing/cost_tracking.mdx</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/evaluation/concepts.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/evaluation/concepts.mdx</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/evaluation/metrics/overview.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/evaluation/metrics/overview.mdx</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/evaluation/annotation_queues.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/evaluation/annotation_queues.mdx</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/production/guardrails.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/production/guardrails.mdx</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/production/rules.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/production/rules.mdx</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/self-host/overview.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/self-host/overview.mdx</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/agent_optimization/overview.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/agent_optimization/overview.mdx</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/prompt_engineering/playground.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/prompt_engineering/playground.mdx</a>
+- <a href="https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/prompt_engineering/prompt_management.mdx">https://raw.githubusercontent.com/comet-ml/opik/main/apps/opik-documentation/documentation/fern/docs/prompt_engineering/prompt_management.mdx</a></p>
+<p><strong>Helicone + PromptLayer</strong>
+- <a href="https://github.com/Helicone/helicone">https://github.com/Helicone/helicone</a>
+- <a href="https://raw.githubusercontent.com/Helicone/helicone/main/docs/features/sessions.mdx">https://raw.githubusercontent.com/Helicone/helicone/main/docs/features/sessions.mdx</a>
+- <a href="https://raw.githubusercontent.com/Helicone/helicone/main/docs/features/advanced-usage/custom-properties.mdx">https://raw.githubusercontent.com/Helicone/helicone/main/docs/features/advanced-usage/custom-properties.mdx</a>
+- <a href="https://raw.githubusercontent.com/Helicone/helicone/main/docs/getting-started/self-host/manual.mdx">https://raw.githubusercontent.com/Helicone/helicone/main/docs/getting-started/self-host/manual.mdx</a>
+- <a href="https://raw.githubusercontent.com/Helicone/helicone/main/docs/features/advanced-usage/caching.mdx">https://raw.githubusercontent.com/Helicone/helicone/main/docs/features/advanced-usage/caching.mdx</a>
+- <a href="https://raw.githubusercontent.com/Helicone/helicone/main/docs/features/advanced-usage/scores.mdx">https://raw.githubusercontent.com/Helicone/helicone/main/docs/features/advanced-usage/scores.mdx</a>
+- <a href="https://raw.githubusercontent.com/MagnivOrg/prompt-layer-library/master/README.md">https://raw.githubusercontent.com/MagnivOrg/prompt-layer-library/master/README.md</a>
+- <a href="https://docs.promptlayer.com/features/prompt-registry/overview">https://docs.promptlayer.com/features/prompt-registry/overview</a>
+- <a href="https://docs.promptlayer.com/running-requests/traces">https://docs.promptlayer.com/running-requests/traces</a>
+- <a href="https://docs.promptlayer.com/features/prompt-history/scoring-requests">https://docs.promptlayer.com/features/prompt-history/scoring-requests</a>
+- <a href="https://docs.promptlayer.com/features/evaluations/programmatic">https://docs.promptlayer.com/features/evaluations/programmatic</a>
+- <a href="https://www.npmjs.com/package/@helicone/async">https://www.npmjs.com/package/@helicone/async</a>
+- <a href="https://www.helicone.ai/blog/self-hosting-journey">https://www.helicone.ai/blog/self-hosting-journey</a></p>
+<p><strong>AgentOps + Laminar + Lunary</strong>
+- <a href="https://github.com/AgentOps-AI/agentops">https://github.com/AgentOps-AI/agentops</a>
+- <a href="https://raw.githubusercontent.com/AgentOps-AI/agentops/main/README.md">https://raw.githubusercontent.com/AgentOps-AI/agentops/main/README.md</a>
+- <a href="https://raw.githubusercontent.com/AgentOps-AI/agentops/main/docs/v2/concepts/core-concepts.mdx">https://raw.githubusercontent.com/AgentOps-AI/agentops/main/docs/v2/concepts/core-concepts.mdx</a>
+- <a href="https://github.com/lmnr-ai/lmnr">https://github.com/lmnr-ai/lmnr</a>
+- <a href="https://raw.githubusercontent.com/lmnr-ai/lmnr/main/README.md">https://raw.githubusercontent.com/lmnr-ai/lmnr/main/README.md</a>
+- <a href="https://raw.githubusercontent.com/lmnr-ai/lmnr/main/docker-compose-full.yml">https://raw.githubusercontent.com/lmnr-ai/lmnr/main/docker-compose-full.yml</a>
+- <a href="https://github.com/lunary-ai">https://github.com/lunary-ai</a>
+- <a href="https://github.com/brotheralameen1/lunary">https://github.com/brotheralameen1/lunary</a>
+- <a href="https://github.com/lunary-ai/lunary-js">https://github.com/lunary-ai/lunary-js</a>
+- <a href="https://docs.lunary.ai/docs/features/observability">https://docs.lunary.ai/docs/features/observability</a></p>
+<p><strong>OpenTelemetry GenAI 语义约定 + OpenLLMetry (Traceloop)</strong>
+- <a href="https://github.com/open-telemetry/semantic-conventions-genai">https://github.com/open-telemetry/semantic-conventions-genai</a>
+- <a href="https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md">https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md</a>
+- <a href="https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md">https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md</a>
+- <a href="https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-events.md">https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-events.md</a>
+- <a href="https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-metrics.md">https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-metrics.md</a>
+- <a href="https://github.com/traceloop/openllmetry">https://github.com/traceloop/openllmetry</a>
+- <a href="https://raw.githubusercontent.com/traceloop/openllmetry/main/packages/opentelemetry-semantic-conventions-ai/opentelemetry/semconv_ai/__init__.py">https://raw.githubusercontent.com/traceloop/openllmetry/main/packages/opentelemetry-semantic-conventions-ai/opentelemetry/semconv_ai/__init__.py</a>
+- <a href="https://raw.githubusercontent.com/traceloop/openllmetry/main/packages/opentelemetry-instrumentation-openai/opentelemetry/instrumentation/openai/utils.py">https://raw.githubusercontent.com/traceloop/openllmetry/main/packages/opentelemetry-instrumentation-openai/opentelemetry/instrumentation/openai/utils.py</a>
+- <a href="https://github.com/traceloop/go-openllmetry">https://github.com/traceloop/go-openllmetry</a>
+- <a href="https://www.traceloop.com/docs/openllmetry/privacy/traces">https://www.traceloop.com/docs/openllmetry/privacy/traces</a></p>
+<p><strong>LangGraph Studio + Google ADK Web UI</strong>
+- <a href="https://raw.githubusercontent.com/langchain-ai/docs/main/src/langsmith/studio.mdx">https://raw.githubusercontent.com/langchain-ai/docs/main/src/langsmith/studio.mdx</a>
+- <a href="https://raw.githubusercontent.com/langchain-ai/docs/main/src/langsmith/use-studio.mdx">https://raw.githubusercontent.com/langchain-ai/docs/main/src/langsmith/use-studio.mdx</a>
+- <a href="https://raw.githubusercontent.com/langchain-ai/docs/main/src/langsmith/observability-studio.mdx">https://raw.githubusercontent.com/langchain-ai/docs/main/src/langsmith/observability-studio.mdx</a>
+- <a href="https://raw.githubusercontent.com/langchain-ai/docs/main/src/langsmith/local-dev-testing.mdx">https://raw.githubusercontent.com/langchain-ai/docs/main/src/langsmith/local-dev-testing.mdx</a>
+- <a href="https://raw.githubusercontent.com/langchain-ai/docs/main/src/oss/langgraph/use-time-travel.mdx">https://raw.githubusercontent.com/langchain-ai/docs/main/src/oss/langgraph/use-time-travel.mdx</a>
+- <a href="https://raw.githubusercontent.com/google/adk-docs/main/docs/runtime/web-interface/index.md">https://raw.githubusercontent.com/google/adk-docs/main/docs/runtime/web-interface/index.md</a>
+- <a href="https://raw.githubusercontent.com/google/adk-docs/main/docs/evaluate/index.md">https://raw.githubusercontent.com/google/adk-docs/main/docs/evaluate/index.md</a>
+- <a href="https://raw.githubusercontent.com/google/adk-docs/main/docs/integrations/cloud-trace.md">https://raw.githubusercontent.com/google/adk-docs/main/docs/integrations/cloud-trace.md</a>
+- <a href="https://github.com/google/adk-web">https://github.com/google/adk-web</a>
+- <a href="https://docs.langchain.com/langsmith/studio">https://docs.langchain.com/langsmith/studio</a>
+- <a href="https://google.github.io/adk-docs/runtime/web-interface/">https://google.github.io/adk-docs/runtime/web-interface/</a>
+- <a href="https://google.github.io/adk-docs/evaluate/">https://google.github.io/adk-docs/evaluate/</a></p>
+<p><strong>OpenAI Agents SDK Tracing + MLflow Tracing</strong>
+- <a href="https://github.com/openai/openai-agents-python/blob/main/docs/tracing.md">https://github.com/openai/openai-agents-python/blob/main/docs/tracing.md</a>
+- <a href="https://github.com/openai/openai-agents-python/blob/main/src/agents/tracing/processor_interface.py">https://github.com/openai/openai-agents-python/blob/main/src/agents/tracing/processor_interface.py</a>
+- <a href="https://github.com/openai/openai-agents-python/blob/main/src/agents/tracing/processors.py">https://github.com/openai/openai-agents-python/blob/main/src/agents/tracing/processors.py</a>
+- <a href="https://github.com/openai/openai-agents-python/blob/main/LICENSE">https://github.com/openai/openai-agents-python/blob/main/LICENSE</a>
+- <a href="https://github.com/openai/openai-agents-python/blob/main/README.md">https://github.com/openai/openai-agents-python/blob/main/README.md</a>
+- <a href="https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/index.mdx">https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/index.mdx</a>
+- <a href="https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/concepts/trace.mdx">https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/concepts/trace.mdx</a>
+- <a href="https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/concepts/span.mdx">https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/concepts/span.mdx</a>
+- <a href="https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/opentelemetry/index.mdx">https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/opentelemetry/index.mdx</a>
+- <a href="https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/opentelemetry/export.mdx">https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/opentelemetry/export.mdx</a>
+- <a href="https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/prod-tracing.mdx">https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/prod-tracing.mdx</a>
+- <a href="https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/app-instrumentation/manual-tracing.mdx">https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/app-instrumentation/manual-tracing.mdx</a>
+- <a href="https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/track-users-sessions/index.mdx">https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/track-users-sessions/index.mdx</a>
+- <a href="https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/integrations/listing/openai-agent.mdx">https://github.com/mlflow/mlflow/blob/master/docs/docs/genai/tracing/integrations/listing/openai-agent.mdx</a></p>
+<p><strong>promptfoo + DeepEval</strong>
+- <a href="https://raw.githubusercontent.com/promptfoo/promptfoo/main/README.md">https://raw.githubusercontent.com/promptfoo/promptfoo/main/README.md</a>
+- <a href="https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/configuration/guide.md">https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/configuration/guide.md</a>
+- <a href="https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/configuration/expected-outputs/index.md">https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/configuration/expected-outputs/index.md</a>
+- <a href="https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/usage/self-hosting.md">https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/usage/self-hosting.md</a>
+- <a href="https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/configuration/caching.md">https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/configuration/caching.md</a>
+- <a href="https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/integrations/ci-cd.md">https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/integrations/ci-cd.md</a>
+- <a href="https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/usage/web-ui.md">https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/usage/web-ui.md</a>
+- <a href="https://raw.githubusercontent.com/confident-ai/deepeval/main/README.md">https://raw.githubusercontent.com/confident-ai/deepeval/main/README.md</a>
+- <a href="https://raw.githubusercontent.com/confident-ai/deepeval/main/docs/content/docs/metrics-introduction.mdx">https://raw.githubusercontent.com/confident-ai/deepeval/main/docs/content/docs/metrics-introduction.mdx</a>
+- <a href="https://raw.githubusercontent.com/confident-ai/deepeval/main/docs/content/docs/%28custom%29/metrics-llm-evals.mdx">https://raw.githubusercontent.com/confident-ai/deepeval/main/docs/content/docs/%28custom%29/metrics-llm-evals.mdx</a>
+- <a href="https://raw.githubusercontent.com/confident-ai/deepeval/main/docs/content/docs/evaluation-unit-testing-in-ci-cd.mdx">https://raw.githubusercontent.com/confident-ai/deepeval/main/docs/content/docs/evaluation-unit-testing-in-ci-cd.mdx</a>
+- <a href="https://raw.githubusercontent.com/confident-ai/deepeval/main/docs/content/docs/synthetic-data-generation-introduction.mdx">https://raw.githubusercontent.com/confident-ai/deepeval/main/docs/content/docs/synthetic-data-generation-introduction.mdx</a></p>
+<p><strong>Datadog LLM Observability + New Relic AI Monitoring</strong>
+- <a href="https://docs.datadoghq.com/llm_observability/">https://docs.datadoghq.com/llm_observability/</a>
+- <a href="https://docs.datadoghq.com/llm_observability/terms/">https://docs.datadoghq.com/llm_observability/terms/</a>
+- <a href="https://docs.datadoghq.com/llm_observability/instrumentation/">https://docs.datadoghq.com/llm_observability/instrumentation/</a>
+- <a href="https://docs.datadoghq.com/llm_observability/instrumentation/sdk/?tab=python">https://docs.datadoghq.com/llm_observability/instrumentation/sdk/?tab=python</a>
+- <a href="https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/">https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/</a>
+- <a href="https://docs.datadoghq.com/llm_observability/evaluations/">https://docs.datadoghq.com/llm_observability/evaluations/</a>
+- <a href="https://docs.datadoghq.com/llm_observability/evaluations/managed_evaluations/">https://docs.datadoghq.com/llm_observability/evaluations/managed_evaluations/</a>
+- <a href="https://docs.datadoghq.com/llm_observability/evaluations/evaluation_compatibility/">https://docs.datadoghq.com/llm_observability/evaluations/evaluation_compatibility/</a>
+- <a href="https://docs.datadoghq.com/llm_observability/experiments/">https://docs.datadoghq.com/llm_observability/experiments/</a>
+- <a href="https://docs.datadoghq.com/llm_observability/monitoring/agent_monitoring/">https://docs.datadoghq.com/llm_observability/monitoring/agent_monitoring/</a>
+- <a href="https://raw.githubusercontent.com/newrelic/docs-website/develop/src/content/docs/ai-monitoring/intro-to-ai-monitoring.mdx">https://raw.githubusercontent.com/newrelic/docs-website/develop/src/content/docs/ai-monitoring/intro-to-ai-monitoring.mdx</a>
+- <a href="https://raw.githubusercontent.com/newrelic/docs-website/develop/src/content/docs/ai-monitoring/compatibility-requirements-ai-monitoring.mdx">https://raw.githubusercontent.com/newrelic/docs-website/develop/src/content/docs/ai-monitoring/compatibility-requirements-ai-monitoring.mdx</a>
+- <a href="https://raw.githubusercontent.com/newrelic/docs-website/develop/src/content/docs/ai-monitoring/explore-ai-data/view-ai-agents.mdx">https://raw.githubusercontent.com/newrelic/docs-website/develop/src/content/docs/ai-monitoring/explore-ai-data/view-ai-agents.mdx</a></p>
+<h2 id="7">7. 核验记录（附录）</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>工具</th>
+<th>核验条数</th>
+<th>确认</th>
+<th>反驳(已订正)</th>
+<th>未核实</th>
+<th>核查员总评</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LangSmith (LangChain)</td>
+<td>10</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+<td>10 条声明全部核实为 confirmed，与官方文档高度一致且多处逐字吻合。核验方式：docs.langchain.com 被网络代理拦截，改为核对其官方构建源仓库 github…</td>
+</tr>
+<tr>
+<td>Langfuse</td>
+<td>10</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+<td>10 条声明全部得到官方来源支持（10 confirmed，0 refuted）。langfuse.com 在本环境被网络策略拦截，故改用其官方文档仓库 langfuse/lang…</td>
+</tr>
+<tr>
+<td>Arize Phoenix + OpenInference</td>
+<td>10</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+<td>10 条声明全部经声称来源（raw.githubusercontent.com 原文抓取）或官方渲染文档独立验证，无一被反驳，整体可靠性很高；仅两处口径瑕疵：JS instrume…</td>
+</tr>
+<tr>
+<td>W&amp;B Weave</td>
+<td>10</td>
+<td>9</td>
+<td>1</td>
+<td>0</td>
+<td>整体高度可靠：10 条中 9 条经原始来源逐项证实（含精确措辞、限额、原文引用），仅第 9 条的 Monitors 描述有一处实质性错误——Error 类 signal 会对失败的…</td>
+</tr>
+<tr>
+<td>Braintrust</td>
+<td>10</td>
+<td>8</td>
+<td>2</td>
+<td>0</td>
+<td>整体可靠性高：10 条中 8 条经官方文档、GitHub 源码或 Terraform 代码逐项证实；2 条部分有误——(1) autoevals README 中的 `npx br…</td>
+</tr>
+<tr>
+<td>Opik (Comet)</td>
+<td>11</td>
+<td>10</td>
+<td>0</td>
+<td>1</td>
+<td>整体高度可靠：10 条声明中 9 条与所引来源逐字吻合（版本号、端点、默认模型、冷却期、优化器名单等细节均精确）；仅两处小瑕疵——"60+ 框架集成"查无官方出处（所引页面写 30…</td>
+</tr>
+<tr>
+<td>Helicone + PromptLayer</td>
+<td>10</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+<td>这份调研可靠性很高：10 条声明全部经原始来源（GitHub README、仓库内 raw 文档、openapi.json、npm registry、SDK 源码）核实为 conf…</td>
+</tr>
+<tr>
+<td>AgentOps + Laminar + Lunary</td>
+<td>10</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+<td>10 条声明经逐条访问声称来源（GitHub 仓库/raw 文件/组织页）与独立检索反驳测试后全部成立，无一被推翻；仅第 2 条的 span 层级实为树形而非严格线性链、第 10 …</td>
+</tr>
+<tr>
+<td>OpenTelemetry GenAI 语义约定 + OpenLLMetry (Traceloop)</td>
+<td>10</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+<td>10 条声明全部经原始来源（含仓库原始 markdown、Python 源码逐字核对、历史版本比对、Go module proxy 权威时间戳）验证为 confirmed，可靠性极…</td>
+</tr>
+<tr>
+<td>LangGraph Studio + Google ADK Web UI</td>
+<td>10</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+<td>10 条声明全部经原始来源（langchain-ai/docs 与 google/adk-docs 的 raw 文件及 google/adk-web 仓库）逐条核对为 confir…</td>
+</tr>
+<tr>
+<td>OpenAI Agents SDK Tracing + MLflow Tracing</td>
+<td>10</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+<td>10 条声明全部经原始来源（GitHub 仓库源码/文档原文）或官方站点直接验证为 confirmed，未发现实质性错误；仅两处来源标注轻微不精确（第 3 条的 TraceProv…</td>
+</tr>
+<tr>
+<td>promptfoo + DeepEval</td>
+<td>10</td>
+<td>9</td>
+<td>1</td>
+<td>0</td>
+<td>整体可靠性高：10 条中 9 条经原始来源逐字核实成立（含 OpenAI 收购这一反直觉事实，已由 OpenAI 官方公告与 TechCrunch 独立佐证），仅第 10 条存在实…</td>
+</tr>
+<tr>
+<td>Datadog LLM Observability + New Relic AI Monitoring</td>
+<td>10</td>
+<td>9</td>
+<td>1</td>
+<td>0</td>
+<td>整体可靠性高：10 条中 9 条经官方文档（含原始 HTML 表格核对）逐项证实，细节（版本号、env 变量、映射表、span 限制）均准确；仅第 10 条被反驳——Datadog…</td>
+</tr>
+</tbody>
+</table></div>
+<p>合计：核验 131 条关键事实，确认 125 条，反驳并订正 5 条（已在 §2 对应档案标注），未核实 1 条。</p>
+<hr />
+<p><em>本报告由多代理调研流水线生成（13 组深度调研 + 逐份反驳式核验 + 全景查漏，27 个代理 / 762 次检索与页面抓取），汇编与分析章节由主代理撰写。日期基准 2026-07-08。</em></p>
+  </main>
+</div>
+<a class="backtop" href="#top">↑ 回到顶部</a>
+</body>
+</html>
