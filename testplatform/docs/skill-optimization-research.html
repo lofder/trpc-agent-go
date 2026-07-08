@@ -92,6 +92,7 @@ ul, ol { padding-left: 26px; }
   main { padding: 28px 20px 90px; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+img{max-width:100%;border:1px solid var(--line);border-radius:10px;margin:14px 0}
 </style>
 </head>
 <body>
@@ -126,6 +127,7 @@ ul, ol { padding-left: 26px; }
 <li><a href="#44">4.4 数据模型草案</a></li>
 <li><a href="#45-api">4.5 API 草案</a></li>
 <li><a href="#46">4.6 风险与守则</a></li>
+<li><a href="#47">4.7 人工调优工作台（交互设计详案）</a></li>
 </ul>
 </li>
 <li><a href="#5">5. 一页结论</a></li>
@@ -544,6 +546,57 @@ POST /api/tuning                     {skill, case_ids, budget} 启动自动调�
 <li><strong>成本护栏</strong>——自动循环的预算按"候选数×用例数×平均 token"预估并在启动时展示，循环内实时累计可中断；</li>
 <li><strong>一切可回滚</strong>——active pointer + 审计日志是 evolution 送的，UI 必须把 Rollback 做成一等公民。</li>
 </ol>
+<h3 id="47">4.7 人工调优工作台（交互设计详案）</h3>
+<blockquote>
+<p>本节是 S1「手动调优闭环」的落地交互设计。配套线框图：同目录 <code>skill-workbench-wireframe.html</code>（可直接浏览器打开），截图如下。设计原则四条：改动即版本（永不覆盖 active）、两个指标两条回路（触发→description，执行→steps/pitfalls）、发布前必须有数据背书、一切可回滚。</p>
+</blockquote>
+<p><img alt="技能调优工作台线框图" src="skill-workbench-wireframe.png" /></p>
+<h4 id="_8">入口：从"问题"进入，而非从"技能"进入</h4>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>入口</th>
+<th>场景</th>
+<th>携带上下文</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>链路页/测试结果页「调优此技能」按钮</td>
+<td>最高频：用例失败，运行记录标注了加载过的技能</td>
+<td>失败用例、断言 diff、完整轨迹自动装填证据面板</td>
+</tr>
+<tr>
+<td>技能列表页</td>
+<td>巡检：按健康指标排序（误触发率、加载后通过率、token 增量）</td>
+<td>该技能的统计与历史</td>
+</tr>
+<tr>
+<td>断点介入页「保存为技能候选」</td>
+<td>现场热修沉淀（见下方联动）</td>
+<td>热修前后的上下文 diff</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="_9">三栏布局与走查流程</h4>
+<ul>
+<li><strong>左栏·技能编辑器（条目化）</strong>：description 单独框（实时 lint：第三人称/触发词/≤1024 字符/SafetyGate 密钥与危险命令扫描）；when_to_use；steps 与 pitfalls <strong>逐条增删改</strong>——落实 ACE 结论「增量条目更新，禁止整篇重写」；提供"原始 SKILL.md" tab 兜底。</li>
+<li><strong>中栏·证据面板</strong>：顶部<strong>病因判定徽章</strong>——本次运行已加载技能但断言失败 → <code>执行质量问题</code>（改 steps/pitfalls）；应加载而未加载 → <code>触发问题</code>（改 description）。判定只用平台已有数据（skill_load 工具调用 + 断言结果 + 会话状态键）。面板内容：断言 diff（期望 vs 实际）、轨迹关键帧（失败点高亮，如"未调用 refund_policy 直接答复"）、同类失败聚合（一键并入证据）、可选「AI 辅助」按钮（读草稿+证据生成修改建议 diff，人工采纳——即 §3.4 的廉价档一键优化）。</li>
+<li><strong>右栏·验证与发布</strong>：验证集三件套（关联用例 + 触发评测集 + holdout 用例）→「双跑验证」（候选发布到隔离目录，影子 Agent 分别以 候选/active 执行）→ 四格对比（用例通过率 Δ / 触发准确率 Δ / token 成本 Δ / holdout 终评）+ 逐用例 diff → 发布 / 继续迭代 / 回滚；底部版本血缘（rev 链、来源、状态）。</li>
+</ul>
+<p>走查（对应线框图 ①-⑧）：<strong>①</strong> 失败现场点入 → <strong>②</strong> 证据自动装填 → <strong>③</strong> 病因徽章定位回路 → <strong>④</strong> 条目化修改 → <strong>⑤</strong> 保存为候选 rev-N（source=manual, parent=active，进 evolution CandidateStore）→ <strong>⑥</strong> 双跑验证出对比报告 → <strong>⑦</strong> 发布（写 active pointer + 审计日志）→ <strong>⑧</strong> 随时回滚。</p>
+<h4 id="_10">与断点介入的双向联动（差异化能力）</h4>
+<ul>
+<li><strong>断点 → 工作台</strong>：断点挂起时人工修改了上下文中技能注入的文本并放行、且该运行最终通过——「把这次修改保存为技能候选版本」一键把热修 diff 沉淀为 rev-N 草稿，进入验证发布流程。断点成为调优的采集入口。</li>
+<li><strong>工作台 → 断点</strong>：工作台"试跑"可勾选"带模型断点"，单步观察候选技能被加载后模型的真实行为（上下文注入段高亮为 <code>skill_content</code> 来源）。</li>
+</ul>
+<h4 id="4445">落地增量（在 §4.4/§4.5 基础上）</h4>
+<ul>
+<li>数据：新增 <code>revision_validation(revision_id, testrun_id, baseline_testrun_id, verdict, created_at)</code> 关联表；run 记录技能版本快照（§4.4 的 <code>skill_snapshot</code> 承接）；</li>
+<li>API：把 §4.5 的 <code>POST /skills/{name}/edit</code> 细化为三段——<code>POST /skills/{name}/draft</code>（保存草稿）→ <code>POST /skills/{name}/validate</code>（双跑验证，返回对比报告）→ <code>POST /skills/{name}/publish</code>（发布，校验验证记录）；<code>rollback</code> 沿用；</li>
+<li>防呆：无验证记录点发布须填写理由（落审计，不硬禁止）；"原始 Markdown" tab 里整篇保存时二次确认；SafetyGate 在保存草稿时即时执行，命中项在编辑器内联标红。</li>
+</ul>
+<p>实现顺序：S0 技能命中标注（证据面板的数据依赖）→ 工作台本体（编辑+版本+血缘）→ 双跑验证（复用批量测试执行器 + 隔离技能目录）→ 断点联动按钮。</p>
 <hr />
 <h2 id="5">5. 一页结论</h2>
 <ol>

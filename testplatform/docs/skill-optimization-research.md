@@ -3,7 +3,7 @@
 <!-- AGENT-GUIDE-START -->
 > **FOR AI AGENTS（机器可读导读）**
 >
-> - **本文档用途**：`testplatform/` 增加「Skill 调优」能力的调研与实现方案。实现某个 skill 相关功能前：§2 查框架 API（含代码路径与接口签名），§3 查外部成功案例的设计依据，§4 查落地方案（S0-S3 分期、数据模型、API 草案）。
+> - **本文档用途**：`testplatform/` 增加「Skill 调优」能力的调研与实现方案。实现某个 skill 相关功能前：§2 查框架 API（含代码路径与接口签名），§3 查外部成功案例的设计依据，§4 查落地方案（S0-S3 分期、数据模型、API 草案；**§4.7 人工调优工作台交互详案**，配套线框图 `skill-workbench-wireframe.html`）。
 > - **前置文档**：`observability-research.md`（同目录）——观测/评测基础设施的调研，本文的 S1/S2 依赖其中 P0/P1 条目（实验对比视图、score 实体化、LLM-as-judge）。
 > - **关键结论速查**：框架已内置完整的 skill 调优后端（`evolution/` 包：LLM 复盘提取 → 门禁 → 审批 → 版本化发布/回滚）；平台要做的是**编排与界面**——把测试用例集当适应度函数（Outcome 信号源）、把审批做成收件箱 UI、把自动调优做成"生成候选→门禁→回归评分→帕累托保留"的循环。**不要重造 evolution 已有的任何环节。**
 > - **落地位置速查**：技能仓库 → `skill/repository.go`；进化流水线 → `evolution/`（types/service/gates/approval_service/revision/publisher）；技能加载工具 → `tool/skill/`（skill_load / skill_run）；Runner 自动入队 → `runner.WithEvolutionService`；平台侧新增代码建议放 `testplatform/internal/platform/skilltune.go` + `api.go` 扩展。
@@ -427,6 +427,41 @@ POST /api/tuning                     {skill, case_ids, budget} 启动自动调�
 3. **防用例集过拟合**——holdout 划分 + 定期用生产 trace 补充新用例；
 4. **成本护栏**——自动循环的预算按"候选数×用例数×平均 token"预估并在启动时展示，循环内实时累计可中断；
 5. **一切可回滚**——active pointer + 审计日志是 evolution 送的，UI 必须把 Rollback 做成一等公民。
+
+### 4.7 人工调优工作台（交互设计详案）
+
+> 本节是 S1「手动调优闭环」的落地交互设计。配套线框图：同目录 `skill-workbench-wireframe.html`（可直接浏览器打开），截图如下。设计原则四条：改动即版本（永不覆盖 active）、两个指标两条回路（触发→description，执行→steps/pitfalls）、发布前必须有数据背书、一切可回滚。
+
+![技能调优工作台线框图](skill-workbench-wireframe.png)
+
+#### 入口：从"问题"进入，而非从"技能"进入
+
+| 入口 | 场景 | 携带上下文 |
+| --- | --- | --- |
+| 链路页/测试结果页「调优此技能」按钮 | 最高频：用例失败，运行记录标注了加载过的技能 | 失败用例、断言 diff、完整轨迹自动装填证据面板 |
+| 技能列表页 | 巡检：按健康指标排序（误触发率、加载后通过率、token 增量） | 该技能的统计与历史 |
+| 断点介入页「保存为技能候选」 | 现场热修沉淀（见下方联动） | 热修前后的上下文 diff |
+
+#### 三栏布局与走查流程
+
+- **左栏·技能编辑器（条目化）**：description 单独框（实时 lint：第三人称/触发词/≤1024 字符/SafetyGate 密钥与危险命令扫描）；when_to_use；steps 与 pitfalls **逐条增删改**——落实 ACE 结论「增量条目更新，禁止整篇重写」；提供"原始 SKILL.md" tab 兜底。
+- **中栏·证据面板**：顶部**病因判定徽章**——本次运行已加载技能但断言失败 → `执行质量问题`（改 steps/pitfalls）；应加载而未加载 → `触发问题`（改 description）。判定只用平台已有数据（skill_load 工具调用 + 断言结果 + 会话状态键）。面板内容：断言 diff（期望 vs 实际）、轨迹关键帧（失败点高亮，如"未调用 refund_policy 直接答复"）、同类失败聚合（一键并入证据）、可选「AI 辅助」按钮（读草稿+证据生成修改建议 diff，人工采纳——即 §3.4 的廉价档一键优化）。
+- **右栏·验证与发布**：验证集三件套（关联用例 + 触发评测集 + holdout 用例）→「双跑验证」（候选发布到隔离目录，影子 Agent 分别以 候选/active 执行）→ 四格对比（用例通过率 Δ / 触发准确率 Δ / token 成本 Δ / holdout 终评）+ 逐用例 diff → 发布 / 继续迭代 / 回滚；底部版本血缘（rev 链、来源、状态）。
+
+走查（对应线框图 ①-⑧）：**①** 失败现场点入 → **②** 证据自动装填 → **③** 病因徽章定位回路 → **④** 条目化修改 → **⑤** 保存为候选 rev-N（source=manual, parent=active，进 evolution CandidateStore）→ **⑥** 双跑验证出对比报告 → **⑦** 发布（写 active pointer + 审计日志）→ **⑧** 随时回滚。
+
+#### 与断点介入的双向联动（差异化能力）
+
+- **断点 → 工作台**：断点挂起时人工修改了上下文中技能注入的文本并放行、且该运行最终通过——「把这次修改保存为技能候选版本」一键把热修 diff 沉淀为 rev-N 草稿，进入验证发布流程。断点成为调优的采集入口。
+- **工作台 → 断点**：工作台"试跑"可勾选"带模型断点"，单步观察候选技能被加载后模型的真实行为（上下文注入段高亮为 `skill_content` 来源）。
+
+#### 落地增量（在 §4.4/§4.5 基础上）
+
+- 数据：新增 `revision_validation(revision_id, testrun_id, baseline_testrun_id, verdict, created_at)` 关联表；run 记录技能版本快照（§4.4 的 `skill_snapshot` 承接）；
+- API：把 §4.5 的 `POST /skills/{name}/edit` 细化为三段——`POST /skills/{name}/draft`（保存草稿）→ `POST /skills/{name}/validate`（双跑验证，返回对比报告）→ `POST /skills/{name}/publish`（发布，校验验证记录）；`rollback` 沿用；
+- 防呆：无验证记录点发布须填写理由（落审计，不硬禁止）；"原始 Markdown" tab 里整篇保存时二次确认；SafetyGate 在保存草稿时即时执行，命中项在编辑器内联标红。
+
+实现顺序：S0 技能命中标注（证据面板的数据依赖）→ 工作台本体（编辑+版本+血缘）→ 双跑验证（复用批量测试执行器 + 隔离技能目录）→ 断点联动按钮。
 
 ---
 
