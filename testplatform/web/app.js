@@ -972,6 +972,8 @@ async function loadSettings() {
   try {
     S.settings = await api("/api/settings");
     const s = S.settings;
+    $("#set-active-agent").innerHTML = (s.available_agents || [s.active_agent]).map((a) =>
+      `<option value="${esc(a)}" ${a === s.active_agent ? "selected" : ""}>${esc(a)}</option>`).join("");
     $("#set-provider").value = s.provider;
     $("#set-model").value = s.model;
     $("#set-baseurl").value = s.base_url || "";
@@ -989,6 +991,7 @@ $("#set-save").onclick = async () => {
     await api("/api/settings", {
       method: "POST",
       body: {
+        active_agent: $("#set-active-agent").value,
         provider: $("#set-provider").value,
         model: $("#set-model").value,
         base_url: $("#set-baseurl").value,

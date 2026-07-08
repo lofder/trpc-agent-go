@@ -152,6 +152,9 @@
       <div class="panel">
         <div class="panel-head"><span>模型与被测 Agent 配置</span></div>
         <div class="settings-form">
+          <label>被测 Agent（代码里通过 RegisterAgent 注册，切换后即刻生效）
+            <select id="set-active-agent" class="sel"></select>
+          </label>
           <label>模型提供方
             <select id="set-provider" class="sel">
               <option value="mock">mock（内置离线模型，无需 Key）</option>
@@ -164,8 +167,8 @@
           <label class="chk"><input type="checkbox" id="set-streaming"> 流式输出</label>
           <label>Temperature <input id="set-temp" class="inp num" type="number" step="0.1" min="0" max="2"></label>
           <label>Max Tokens <input id="set-maxtok" class="inp num" type="number" min="1"></label>
-          <label>Agent 名称 <input id="set-agent" class="inp"></label>
-          <label>系统指令（Instruction，用于观察上下文拼接来源）
+          <label>Agent 名称（仅作用于内置演示 Agent） <input id="set-agent" class="inp"></label>
+          <label>系统指令（仅内置演示 Agent 使用；自定义 Agent 可在 builder 里读取 bc.Settings.Instruction 来接入此处的热更新）
             <textarea id="set-instruction" rows="4" class="inp"></textarea>
           </label>
           <div><button id="set-save" class="btn primary">保存并重建 Agent</button></div>

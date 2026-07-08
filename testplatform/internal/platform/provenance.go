@@ -199,10 +199,13 @@ func AnalyzeContext(inv *agent.Invocation, req *model.Request, configuredInstruc
 		case m.Role == model.RoleSystem && !seenSystem:
 			seenSystem = true
 			p.Source = SrcSystemInstruction
-			exact := strings.TrimSpace(m.Content) == strings.TrimSpace(configuredInstruction)
-			detail := "内容在配置的 Instruction 基础上有增强（可能合并了 GlobalInstruction / 身份说明 / 时间信息 / 状态占位符替换等处理器注入）。"
-			if exact {
-				detail = "内容与 Agent 配置的 Instruction 完全一致。"
+			detail := ""
+			if strings.TrimSpace(configuredInstruction) != "" {
+				if strings.TrimSpace(m.Content) == strings.TrimSpace(configuredInstruction) {
+					detail = "内容与 Agent 配置的 Instruction 完全一致。"
+				} else {
+					detail = "内容在配置的 Instruction 基础上有增强（可能合并了 GlobalInstruction / 身份说明 / 时间信息 / 状态占位符替换等处理器注入）。"
+				}
 			}
 			p.Reason = "由 InstructionRequestProcessor 在每次模型调用构建请求时注入为第一条 system 消息。" +
 				"拼接条件：Agent 配置了 WithInstruction/WithGlobalInstruction 即注入；每轮都会基于当前会话状态重新生成（支持 {key} 占位符替换）。" + detail

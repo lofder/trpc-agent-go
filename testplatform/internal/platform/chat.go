@@ -41,9 +41,13 @@ func (p *Platform) StartRun(req RunRequest) (string, <-chan struct{}, error) {
 	p.mu.Lock()
 	r := p.runner
 	settings := p.settings
+	agentName := p.activeAgentName
 	p.mu.Unlock()
 	if r == nil {
 		return "", nil, fmt.Errorf("runner not ready")
+	}
+	if agentName == "" {
+		agentName = settings.AgentName
 	}
 
 	runID := uuid.NewString()
@@ -55,7 +59,7 @@ func (p *Platform) StartRun(req RunRequest) (string, <-chan struct{}, error) {
 		AppName:   AppName,
 		UserID:    req.UserID,
 		SessionID: req.SessionID,
-		AgentName: settings.AgentName,
+		AgentName: agentName,
 		ModelName: settings.Model,
 		Input:     req.Input,
 	})

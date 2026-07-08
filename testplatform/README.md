@@ -113,16 +113,52 @@ docker run -p 8080:8080 -e OPENAI_API_KEY=xxx -e MODEL_NAME=deepseek-v4-flash tr
 用例生成：`template` 模式离线可用（围绕内置工具生成）；`llm` 模式用当前配置的模型生成
 （输出不合法时自动回退模板）。
 
-## 被测 Agent 与 Mock 模型
+## 对接你自己的 Agent（迭代友好）
 
-默认被测 Agent（`chat-assistant`）挂载三个演示工具：`calculator`（四则/幂运算）、
-`current_time`（时区时间）、`get_weather`（确定性模拟天气）。
+被测 Agent 通过**注册构建器（AgentBuilder）**接入，平台代码零修改；你的 Agent
+随便怎么迭代，只要 builder 还在，平台在启动、保存设置、切换被测 Agent 时都会自动
+重建它。完整可运行示例见 [`examples/customagent`](examples/customagent/main.go)
+（`go run ./examples/customagent`）。
+
+```go
+p, _ := platform.New("testplatform-data", 300)
+
+p.RegisterAgent("my-agent", func(bc platform.BuildContext) (agent.Agent, error) {
+    opts := []llmagent.Option{
+        llmagent.WithModel(bc.Model),            // 跟随平台设置页的模型（也可换成你固定的模型）
+        llmagent.WithInstruction("你的系统指令"),  // 想在 UI 热更新就读 bc.Settings.Instruction
+        llmagent.WithTools(yourTools),           // 你的业务工具
+        // ……你的其他组装逻辑（planner/知识库/子 Agent 等随意）
+    }
+    opts = append(opts, bc.Instrument.LLMAgentOptions()...) // ← 接入监控的全部代价：这一行
+    return llmagent.New("my-agent", opts...), nil
+})
+_ = p.SetActiveAgent("my-agent")
+
+http.ListenAndServe(":8080", p.NewHTTPHandler(web.FS()))
+```
+
+迭代过程中的几个支点：
+
+- **多版本对比**：注册多个 builder（`my-agent-v1` / `my-agent-v2` / 实验分支），
+  「设置」页下拉即可切换被测对象，用同一批用例分别跑回归；
+- **Prompt 热调**：builder 里读 `bc.Settings.Instruction`，就能在 UI 改指令、
+  保存即重建，不用重启进程；模型/温度/流式同理走 `bc.Model` / `bc.Settings`；
+- **已有回调不冲突**：`bc.Instrument.Model` 等是标准的 `*model.Callbacks` 对象，
+  你自己的回调继续往上面 `RegisterBeforeModel(...)` 即可，按注册顺序执行；
+- **多 Agent/子 Agent**：给每个子 `llmagent` 也 append 一份
+  `bc.Instrument.LLMAgentOptions()`，它们的模型/工具调用同样进入链路；
+- **用例随代码走**：用例是纯 JSON（`-data` 指到你仓库里的目录即可进 git），
+  断言写行为级（工具是否被调/输出包含/调用次数上限），实现重构不破坏用例；
+- **CI 回归**：`ci/run_cases.sh` 启动平台后跑全部（或指定）用例，
+  失败即非零退出码：`./ci/run_cases.sh http://localhost:8080`。
+
+## 内置演示 Agent 与 Mock 模型
+
+内置被测 Agent（`builtin-demo`，名称 `chat-assistant`）挂载三个演示工具：
+`calculator`（四则/幂运算）、`current_time`（时区时间）、`get_weather`（确定性模拟天气）。
 未配置 API Key 时使用内置 **Mock 模型**：能识别算式/时间/天气问题并发起真实的工具调用循环
 （含流式分片输出），因此**所有平台能力离线即可完整演练**；配置 Key 后即为真实 LLM 测试。
-
-要测试你自己的 Agent，修改 `internal/platform/platform.go` 中 `rebuildLocked` 的
-`llmagent.New(...)` 组装逻辑（替换工具/指令/模型），或按同样方式把
-`Collector` 的三组回调挂到你现有的 Agent 上即可。
 
 ## HTTP API 一览
 
