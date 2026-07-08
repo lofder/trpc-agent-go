@@ -1,0 +1,5 @@
+# runtime artifacts
+testplatform-data/
+/testplatform
+# re-include (root .gitignore excludes extension-less files)
+!Dockerfile

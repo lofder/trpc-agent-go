@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>trpc-agent-go 测试监控平台</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧪</text></svg>">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-title">🧪 Agent 测试平台</div>
+      <div class="brand-sub">trpc-agent-go</div>
+    </div>
+    <nav id="nav">
+      <a href="#dashboard" data-page="dashboard">📊 总览与实时日志</a>
+      <a href="#playground" data-page="playground">💬 调试台</a>
+      <a href="#traces" data-page="traces">🔗 链路追踪</a>
+      <a href="#breakpoints" data-page="breakpoints">⏸ 断点介入 <span id="bp-badge" class="badge hidden">0</span></a>
+      <a href="#cases" data-page="cases">📋 测试用例</a>
+      <a href="#rules" data-page="rules">📖 拼接规则</a>
+      <a href="#settings" data-page="settings">⚙️ 设置</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div id="conn-status" class="conn offline">● 连接中…</div>
+      <div id="model-chip" class="model-chip">-</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- ============ 总览 ============ -->
+    <section id="page-dashboard" class="page">
+      <h1>总览与实时日志</h1>
+      <div class="stat-row" id="stat-row"></div>
+      <div class="panel">
+        <div class="panel-head">
+          <span>实时执行日志（每一步）</span>
+          <span class="spacer"></span>
+          <select id="log-level" class="sel">
+            <option value="">全部级别</option>
+            <option>STEP</option><option>INFO</option><option>WARN</option><option>ERROR</option>
+          </select>
+          <select id="log-category" class="sel">
+            <option value="">全部类别</option>
+            <option value="agent">agent</option><option value="model">model</option>
+            <option value="context">context</option><option value="tool">tool</option>
+            <option value="event">event</option><option value="breakpoint">breakpoint</option>
+            <option value="session">session</option><option value="testcase">testcase</option>
+            <option value="server">server</option><option value="http">http</option>
+          </select>
+          <button id="log-pause" class="btn small">⏸ 暂停滚动</button>
+          <button id="log-clear" class="btn small">清屏</button>
+        </div>
+        <div id="log-stream" class="log-stream"></div>
+      </div>
+    </section>
+
+    <!-- ============ 调试台 ============ -->
+    <section id="page-playground" class="page hidden">
+      <h1>调试台 <span class="hint">发送消息给被测 Agent，实时观察执行链路。开启断点后可在发送前介入修改上下文。</span></h1>
+      <div class="playground-bar">
+        <label>会话:</label>
+        <select id="pg-session" class="sel"></select>
+        <button id="pg-new-session" class="btn small">＋ 新会话</button>
+        <label class="chk"><input type="checkbox" id="pg-bp-model"> 模型断点</label>
+        <label class="chk"><input type="checkbox" id="pg-bp-tool"> 工具断点</label>
+        <span class="spacer"></span>
+        <button id="pg-view-session" class="btn small">查看会话事件</button>
+      </div>
+      <div class="chat-wrap">
+        <div id="chat-box" class="chat-box"></div>
+        <div class="chat-input">
+          <textarea id="chat-text" rows="2" placeholder="输入消息，例如：帮我计算 12 * 34 ／ 现在几点了 ／ 深圳天气怎么样（Enter 发送，Shift+Enter 换行）"></textarea>
+          <button id="chat-send" class="btn primary">发送</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 链路追踪 ============ -->
+    <section id="page-traces" class="page hidden">
+      <h1>链路追踪 <span class="hint">每次运行 = Agent → 模型调用(上下文拼接) → 工具调用 的完整链路</span></h1>
+      <div class="trace-layout">
+        <div class="trace-list panel">
+          <div class="panel-head"><span>运行记录</span><span class="spacer"></span>
+            <button id="trace-refresh" class="btn small">刷新</button></div>
+          <div id="run-list" class="run-list"></div>
+        </div>
+        <div class="trace-detail panel">
+          <div class="panel-head"><span id="trace-title">选择一条运行记录</span></div>
+          <div id="trace-detail" class="trace-detail-body"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 断点介入 ============ -->
+    <section id="page-breakpoints" class="page hidden">
+      <h1>断点介入 <span class="hint">在模型调用/工具执行前挂起，人工查看并修改上下文，或注入自定义结果</span></h1>
+      <div class="panel">
+        <div class="panel-head"><span>断点开关</span></div>
+        <div class="bp-controls">
+          <label class="chk big"><input type="checkbox" id="bp-model"> <b>模型请求断点</b>：每次调用 LLM 前暂停，可编辑全部已拼接消息 / 注入模型响应</label>
+          <label class="chk big"><input type="checkbox" id="bp-tool"> <b>工具调用断点</b>：每次执行工具前暂停，可修改参数 / 注入工具结果</label>
+          <label>等待超时(秒): <input type="number" id="bp-timeout" class="inp num" value="900" min="10"> <span class="hint">超时后自动放行</span></label>
+          <button id="bp-save" class="btn primary small">应用</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span>待处理介入</span><span class="spacer"></span><span class="hint">运行会挂起直到你处理或超时</span></div>
+        <div id="iv-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ 测试用例 ============ -->
+    <section id="page-cases" class="page hidden">
+      <h1>测试用例 <span class="hint">手动录入 / JSON 导入 / 自动生成，批量运行并校验断言</span></h1>
+      <div class="case-toolbar">
+        <button id="case-new" class="btn primary">＋ 新建用例</button>
+        <button id="case-import" class="btn">📥 导入 JSON</button>
+        <button id="case-export" class="btn">📤 导出全部</button>
+        <button id="case-generate" class="btn">✨ 生成用例</button>
+        <span class="spacer"></span>
+        <button id="case-run-selected" class="btn warn">▶ 运行选中</button>
+        <button id="case-run-all" class="btn warn">▶▶ 运行全部</button>
+      </div>
+      <div class="panel">
+        <table class="case-table">
+          <thead><tr>
+            <th style="width:28px"><input type="checkbox" id="case-check-all"></th>
+            <th>名称</th><th>轮次</th><th>断言</th><th>来源</th><th>更新时间</th><th style="width:130px">操作</th>
+          </tr></thead>
+          <tbody id="case-tbody"></tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span>批量测试结果</span><span class="spacer"></span>
+          <button id="testrun-refresh" class="btn small">刷新</button></div>
+        <div id="testrun-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ 拼接规则 ============ -->
+    <section id="page-rules" class="page hidden">
+      <h1>上下文拼接规则 <span class="hint">trpc-agent-go 请求处理器流水线：哪些上下文、在什么条件下、以什么顺序拼接</span></h1>
+      <div id="rules-list"></div>
+    </section>
+
+    <!-- ============ 设置 ============ -->
+    <section id="page-settings" class="page hidden">
+      <h1>设置</h1>
+      <div class="panel">
+        <div class="panel-head"><span>模型与被测 Agent 配置</span></div>
+        <div class="settings-form">
+          <label>模型提供方
+            <select id="set-provider" class="sel">
+              <option value="mock">mock（内置离线模型，无需 Key）</option>
+              <option value="openai">openai（OpenAI 兼容 API）</option>
+            </select>
+          </label>
+          <label>模型名称 <input id="set-model" class="inp" placeholder="如 deepseek-v4-flash / gpt-4o-mini / mock-llm"></label>
+          <label>Base URL <input id="set-baseurl" class="inp" placeholder="OpenAI 兼容接口地址，留空用官方默认"></label>
+          <label>API Key <input id="set-apikey" class="inp" type="password" placeholder="留空则保持现有 Key 不变"> <span id="set-key-state" class="hint"></span></label>
+          <label class="chk"><input type="checkbox" id="set-streaming"> 流式输出</label>
+          <label>Temperature <input id="set-temp" class="inp num" type="number" step="0.1" min="0" max="2"></label>
+          <label>Max Tokens <input id="set-maxtok" class="inp num" type="number" min="1"></label>
+          <label>Agent 名称 <input id="set-agent" class="inp"></label>
+          <label>系统指令（Instruction，用于观察上下文拼接来源）
+            <textarea id="set-instruction" rows="4" class="inp"></textarea>
+          </label>
+          <div><button id="set-save" class="btn primary">保存并重建 Agent</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 模态框 -->
+<div id="modal-mask" class="modal-mask hidden">
+  <div id="modal" class="modal">
+    <div class="modal-head"><span id="modal-title">标题</span><button id="modal-close" class="btn small">✕</button></div>
+    <div id="modal-body" class="modal-body"></div>
+  </div>
+</div>
+
+<div id="toasts" class="toasts"></div>
+<script src="app.js"></script>
+</body>
+</html>
